@@ -453,8 +453,10 @@ func _update_raft_visual() -> void:
 	_raft_visual.visible = sailing
 
 var _torch_light: OmniLight3D = null
+var _arm_confirm := 0.0
 
 func _survival_tick(delta: float) -> void:
+	_arm_confirm = maxf(_arm_confirm - delta, 0.0)
 	reconcile_grid()
 	# a held torch pushes back the night (and the dwellers)
 	var torch_out: bool = held_item() == "torch" and inv.get("torch", 0) > 0
@@ -513,9 +515,16 @@ func _survival_tick(delta: float) -> void:
 		_respawn()
 
 func _respawn() -> void:
+	var w := _world()
+	if w and w.sealed:
+		# the way back in is gone — the sea does not return you this time
+		visible = false
+		if hud:
+			hud.show_sealed()
+		set_physics_process(false)
+		return
 	hp = 100.0
 	hunger = 60.0
-	var w := _world()
 	if w:
 		global_position = w.get_spawn_pos(peer_id)
 	velocity = Vector3.ZERO
@@ -1576,6 +1585,20 @@ func _interact() -> void:
 			elif hud:
 				hud.flash("Repairs take wood.")
 		elif kind == "totem":
+			var w2 := _world()
+			var can_arm: bool = w2.is_night() and inv.get("moonstone", 0) > 0 \
+				and not w2.peaceful and not w2.sealed \
+				and (w2.game_mode == "story" or (w2.game_mode == "hard" and w2.hard_nights >= w2.HARD_NIGHTS_TO_HARDCORE))
+			if can_arm:
+				if _arm_confirm > 0.0:
+					inv["moonstone"] -= 1
+					w2.sv_arm_totem.rpc_id(1, String(col.name))
+					_arm_confirm = 0.0
+				else:
+					_arm_confirm = 4.0
+					if hud:
+						hud.flash("The totem thirsts for your moonstone.\nPress E again to let it drink — and wake the Long Game.")
+				return
 			var deposit: int = mini(inv.get("wood", 0), 5)
 			if deposit > 0:
 				inv["wood"] -= deposit

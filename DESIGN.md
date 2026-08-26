@@ -364,6 +364,21 @@ Big systems, in build order, each its own pass:
   accidental friendly fire inside them.
 - No wipes — worlds are meant to be kept.
 
+## v0.19 status (this repo)
+Added in 0.19 — **THE LONG GAME**: feed the totem a moonstone at night (double-
+press E) and it darkens — **HARD mode**: nightly raider waves per totem,
+composition drawn from the totem's biome (bears in the highlands, boars in the
+meadow…), scaling each night, marching on your walls and hitting structures
+for real damage; survivors slink off at dawn with a reward for the living.
+Survive 5 nights, feed it again — **HARDCORE**: every night also rolls a
+seeded, timed **trial** (offer N wood / slay every raider / hold stock ≥ X at
+dawn) while the waves come. Pass 7 → **THE END** (golden overlay, permanent
+peace, trophies for all). **Fail a trial → a totem crumbles. Lose the last →
+the world SEALS**: full-screen verdict, no respawns, the save survives forever
+as a tomb, and the menu lists it as ⳼ SEALED, unopenable. The Heart route
+remains the kind path to peace; the totem route is the earned one. All state
+persisted + synced.
+
 ## v0.18 status (this repo)
 Added in 0.18 — **Chain #3: the Depths**: the awakened monolith unseals a
 hatch beside it; stepping through descends into a great hall 30 m beneath the

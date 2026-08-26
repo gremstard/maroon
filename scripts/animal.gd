@@ -32,6 +32,8 @@ var flee_dir := Vector3.ZERO
 var aggro_peer := 0
 var aggro_timer := 0.0
 var attack_cooldown := 0.0
+var raider := false           # long-game wave member: marches on the totem
+var raid_target := Vector3.ZERO
 var _target_prev_pos := Vector3.ZERO
 var _target_still_time := 0.0
 
@@ -190,6 +192,10 @@ func server_ai(delta: float, world: World) -> void:
 	mode_timer -= delta
 	aggro_timer -= delta
 	attack_cooldown -= delta
+	if raider:
+		_ai_raider(delta, world)
+		global_position.y = world.height_at(global_position.x, global_position.z) + 0.1
+		return
 	match kind:
 		"wolf":
 			_ai_wolf(delta, world)
@@ -221,6 +227,34 @@ func _beak_mat() -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = Color(0.75, 0.62, 0.30)
 	return m
+
+func _ai_raider(delta: float, world: World) -> void:
+	# Wave discipline: kill what's close, wreck what's in the way,
+	# march on the totem.
+	var target := _nearest_player(world)
+	if target and global_position.distance_to(target.global_position) < 7.0:
+		if not _bite(target, STATS[kind]["dmg"]):
+			var tp := target.global_position - global_position
+			tp.y = 0
+			if tp.length() > 1.6:
+				_move(tp.normalized(), 4.6, delta, world)
+		return
+	var to_t := raid_target - global_position
+	to_t.y = 0
+	if to_t.length() > 2.0:
+		_move(to_t.normalized(), 3.4, delta, world)
+	if attack_cooldown <= 0.0:
+		var best: Node3D = null
+		var bd := 2.6
+		for s in world.get_node("Structures").get_children():
+			var d: float = global_position.distance_to(s.global_position)
+			if d < bd:
+				bd = d
+				best = s
+		if best:
+			attack_cooldown = 1.6
+			world.rx_struct_hp.rpc(String(best.name), float(best.get_meta("hp")) - 10.0)
+			Sfx.play_at(world, best.global_position, "thud", -4.0)
 
 func _ai_snake(delta: float, world: World) -> void:
 	# It doesn't chase. It waits in the grass. That's worse.

@@ -175,6 +175,22 @@ func _ready() -> void:
 			await get_tree().create_timer(0.4).timeout
 			pl._try_fish()
 			await get_tree().create_timer(0.4).timeout
+		if "--shot-wave" in args:
+			var tw := pl.global_position + Vector3(6, 0, -4)
+			world.sv_place_structure("totem", tw, 0.0)
+			world.sv_place_structure("wall", Vector3(roundf(tw.x / 3.0) * 3.0 + 1.5, tw.y, roundf(tw.z / 3.0) * 3.0), PI / 2)
+			await get_tree().create_timer(0.3).timeout
+			world.time_of_day = 22.5
+			world.rx_mode("hard", 2, 0)
+			world.game_mode = "hard"
+			world.hard_nights = 2
+			world._spawn_wave()
+			pl.owned_tools["iron_spear"] = true
+			pl.set_hotbar(1, "iron_spear")
+			pl.selected_slot = 1
+			var to_t: Vector3 = tw - pl.global_position
+			pl.rotation.y = atan2(-to_t.x, -to_t.z)
+			await get_tree().create_timer(2.5).timeout
 		if "--shot-depths" in args:
 			world.rx_monolith_awakened()
 			world.sv_place_structure("torch", world.depths_center + Vector3(6, 0, 3), 0.0)
@@ -382,10 +398,15 @@ func _show_ctx(mode: String) -> void:
 				_ctx_note("No worlds yet — make one with New World.")
 			for w in worlds:
 				var b := Button.new()
-				b.text = "Seed %d  —  Day %d" % [w["seed"], w["day"]]
-				b.pressed.connect(func() -> void:
-					seed_edit.text = str(w["seed"])
-					_on_host_pressed())
+				if w["sealed"]:
+					b.text = "Seed %d  —  ⳼ SEALED (Day %d)" % [w["seed"], w["day"]]
+					b.disabled = true
+					b.tooltip_text = "The island took this one back. The save remains as a tomb."
+				else:
+					b.text = "Seed %d  —  Day %d" % [w["seed"], w["day"]]
+					b.pressed.connect(func() -> void:
+						seed_edit.text = str(w["seed"])
+						_on_host_pressed())
 				ctx_box.add_child(b)
 		"join":
 			ctx_box.add_child(ip_edit)
@@ -433,20 +454,22 @@ func _list_worlds() -> Array:
 		return out
 	for f in dir.get_files():
 		if f.begins_with("world_") and f.ends_with(".json"):
-			var entry := {"seed": int(f.trim_prefix("world_").trim_suffix(".json")), "day": 1, "mtime": FileAccess.get_modified_time("user://saves/" + f)}
+			var entry := {"seed": int(f.trim_prefix("world_").trim_suffix(".json")), "day": 1, "sealed": false, "mtime": FileAccess.get_modified_time("user://saves/" + f)}
 			var data: Variant = JSON.parse_string(FileAccess.open("user://saves/" + f, FileAccess.READ).get_as_text())
 			if data is Dictionary:
 				entry["day"] = int(data.get("day", 1))
+				entry["sealed"] = data.get("sealed", false)
 			out.append(entry)
 	out.sort_custom(func(a, b): return a["mtime"] > b["mtime"])
 	return out
 
 func _continue_latest() -> void:
-	var worlds := _list_worlds()
-	if worlds.is_empty():
-		return
-	seed_edit.text = str(worlds[0]["seed"])
-	_on_host_pressed()
+	for w in _list_worlds():
+		if not w["sealed"]:
+			seed_edit.text = str(w["seed"])
+			_on_host_pressed()
+			return
+	_set_status("Every world here is sealed. New World awaits.")
 
 func _list_servers() -> Array:
 	if not FileAccess.file_exists("user://servers.json"):
@@ -1150,6 +1173,41 @@ func _run_smoke_test() -> void:
 	await get_tree().create_timer(0.5).timeout
 	print("[smoke] goals completed: ", p.hud.goals_done, "/", p.hud.goals.size())
 	ok = ok and p.hud.goals_done >= 4
+
+	# the long game: arm -> wave -> hardcore trials -> totem loss -> seal
+	world.peaceful = false   # test seam: undo the heart for the gauntlet
+	world.time_of_day = 23.0
+	world.sv_arm_totem(totem[0].name)
+	ok = ok and world.game_mode == "hard"
+	world._spawn_wave()
+	await get_tree().create_timer(0.5).timeout
+	var raiders := world.get_node("Animals").get_children().filter(func(a): return a.raider)
+	print("[smoke] long game: mode=%s wave=%d raiders=%d" % [world.game_mode, world._wave_names.size(), raiders.size()])
+	ok = ok and world._wave_names.size() > 0 and raiders.size() == world._wave_names.size()
+	world._on_dawn()
+	ok = ok and world.hard_nights == 1 and world._wave_names.is_empty()
+	world.hard_nights = 5
+	world.sv_arm_totem(totem[0].name)
+	ok = ok and world.game_mode == "hardcore"
+	world.hc_goal = {"kind": "slay", "n": 0, "desc": "test"}
+	world._on_dawn()
+	ok = ok and world.hardcore_rounds == 1
+	world.sv_place_structure("totem", p.global_position + Vector3(6, 0, 6), 0.0)
+	await get_tree().create_timer(0.2).timeout
+	world.hc_goal = {"kind": "deposit", "n": 9999, "desc": "test-fail"}
+	world._night_deposits = 0
+	world._on_dawn()   # fail: one totem burns
+	await get_tree().create_timer(0.2).timeout
+	var totems_left := world._totems().size()
+	ok = ok and totems_left == 1 and not world.sealed
+	world.hc_goal = {"kind": "deposit", "n": 9999, "desc": "test-fail-2"}
+	world._on_dawn()   # fail again: last totem -> sealed
+	await get_tree().create_timer(0.2).timeout
+	print("[smoke] gauntlet: rounds=%d totems_left=%d sealed=%s" % [world.hardcore_rounds, totems_left, world.sealed])
+	ok = ok and world.sealed
+	world.save_now()
+	var sealed_save: Variant = JSON.parse_string(FileAccess.open("user://saves/world_42.json", FileAccess.READ).get_as_text())
+	ok = ok and sealed_save.get("sealed", false) == true
 
 	print("[smoke] ", "ALL PASS" if ok else "FAILURES — see above")
 	get_tree().quit(0 if ok else 1)

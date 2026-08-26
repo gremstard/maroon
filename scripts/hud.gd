@@ -526,6 +526,55 @@ func toggle_craft_list() -> void:
 		toggle_craft()
 	craft_list_box.visible = not craft_list_box.visible
 
+var _end_overlay: Control = null
+
+func _big_overlay(bg: Color, title: String, sub: String) -> Control:
+	var o := Control.new()
+	o.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var rect := ColorRect.new()
+	rect.color = bg
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	o.add_child(rect)
+	var v := VBoxContainer.new()
+	v.set_anchors_preset(Control.PRESET_CENTER)
+	v.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	v.grow_vertical = Control.GROW_DIRECTION_BOTH
+	o.add_child(v)
+	var t := Label.new()
+	t.text = title
+	t.add_theme_font_size_override("font_size", 44)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	var s := Label.new()
+	s.text = sub
+	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	s.modulate = Color(1, 1, 1, 0.75)
+	v.add_child(s)
+	get_child(0).add_child(o)
+	return o
+
+func show_sealed() -> void:
+	if _end_overlay:
+		return
+	_end_overlay = _big_overlay(Color(0.03, 0.02, 0.04, 0.93),
+		"THE ISLAND TAKES BACK ITS OWN",
+		"The last totem is ash. The way in is sealed.\nYour works remain — you will never see them again.\n\nThis world is over. (Esc → quit; the save stays as a tomb.)")
+
+func show_the_end() -> void:
+	if _end_overlay:
+		return
+	_end_overlay = _big_overlay(Color(0.35, 0.22, 0.05, 0.85),
+		"T H E   E N D",
+		"Seven trials. Every wave broken on your walls.\nThe island yields — truly, permanently peaceful.\nBuild. Sail. Fish. It's yours now.")
+	Sfx.play(self, "chime", 4.0)
+	var tw := create_tween()
+	tw.tween_interval(9.0)
+	tw.tween_property(_end_overlay, "modulate:a", 0.0, 2.0)
+	tw.tween_callback(func() -> void:
+		if _end_overlay:
+			_end_overlay.queue_free()
+			_end_overlay = null)
+
 var pause_panel: PanelContainer = null
 
 func toggle_pause() -> void:
@@ -662,7 +711,15 @@ func _process(delta: float) -> void:
 			night_tag = "   ☮ peaceful night" if w.peaceful else "   << NIGHT — wolves hunt >>"
 		elif w.peaceful:
 			night_tag = "   ☮"
-		clock_label.text = "Day %d — %02d:%02d%s%s" % [w.day, hh, mm, wx, night_tag]
+		var mode_tag := ""
+		match w.game_mode:
+			"hard":
+				mode_tag = "   ☠ HARD — night %d/%d survived" % [w.hard_nights, w.HARD_NIGHTS_TO_HARDCORE]
+			"hardcore":
+				mode_tag = "   ☠☠ TRIAL %d/%d" % [w.hardcore_rounds, w.HARDCORE_ROUNDS_TO_END]
+				if w.is_night() and w.hc_goal.has("desc"):
+					mode_tag += " — " + String(w.hc_goal["desc"])
+		clock_label.text = "Day %d — %02d:%02d%s%s%s" % [w.day, hh, mm, wx, mode_tag, night_tag]
 
 	if w:
 		var night_now := w.is_night()

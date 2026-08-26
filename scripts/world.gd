@@ -699,6 +699,7 @@ func sv_attack_animal(aname: String, dmg: float) -> void:
 	rx_animal_flinch.rpc(aname)
 	if a.hp <= 0.0:
 		rx_animal_dead.rpc(aname)
+		_wave_names.erase(aname)
 		var drops := {"raw_meat": Animal.STATS[a.kind]["meat"]}
 		var hide_yield: int = {"deer": 1, "wolf": 1, "boar": 2, "bear": 3}.get(a.kind, 0)
 		if hide_yield > 0:
@@ -1114,6 +1115,8 @@ func sv_deposit_wood(sname: String, amount: int) -> void:
 	var t := holder.get_node(sname)
 	if t.get_meta("kind") != "totem":
 		return
+	if game_mode == "hardcore" and is_night():
+		_night_deposits += amount
 	rx_totem_stock.rpc(sname, int(t.get_meta("stock")) + clampi(amount, 0, 100))
 
 @rpc("authority", "call_local", "reliable")
@@ -2042,6 +2045,208 @@ func rx_monolith_awakened() -> void:
 	mono.add_child(mlight)
 	Sfx.play_at(self, mono.global_position, "chime", 2.0)
 
+# ================================================================ the long game
+# STORY -> HARD -> HARDCORE -> THE END. The Heart route buys peace the kind
+# way; the totem route earns it. Feed the totem a moonstone at night and it
+# drinks the light and darkens — then the island starts sending its answer.
+
+const HARD_NIGHTS_TO_HARDCORE := 5
+const HARDCORE_ROUNDS_TO_END := 7
+
+var game_mode := "story"      # story | hard | hardcore | ended
+var sealed := false
+var hard_nights := 0
+var hardcore_rounds := 0
+var _wave_names: Array = []
+var hc_goal := {}             # {kind, desc, n, progress}
+var _night_deposits := 0
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_arm_totem(tname: String) -> void:
+	if not multiplayer.is_server() or sealed or peaceful:
+		return
+	if not is_night():
+		return
+	if game_mode == "story":
+		rx_mode.rpc("hard", 0, 0)
+	elif game_mode == "hard" and hard_nights >= HARD_NIGHTS_TO_HARDCORE:
+		rx_mode.rpc("hardcore", hard_nights, 0)
+	else:
+		return
+	Sfx.play_at(self, get_node("Structures").get_node(tname).global_position, "roar", 2.0)
+
+@rpc("authority", "call_local", "reliable")
+func rx_mode(mode: String, hn: int, hr: int) -> void:
+	game_mode = mode
+	hard_nights = hn
+	hardcore_rounds = hr
+	# every totem darkens
+	for s in get_node("Structures").get_children():
+		if s.get_meta("kind") == "totem" and mode in ["hard", "hardcore"]:
+			for c in s.get_children():
+				if c is MeshInstance3D:
+					c.material_override = _flat_mat(Color(0.12, 0.10, 0.14))
+	var msgs := {
+		"hard": "THE TOTEM DRINKS THE LIGHT AND DARKENS.\nThe island answers at nightfall. Hold your walls.",
+		"hardcore": "THE TOTEM ASKS FOR EVERYTHING.\nTimed trials each night. Fail one, lose a totem.\nLose the last, lose the way back in.",
+		"ended": "",
+	}
+	if msgs.get(mode, "") != "" and _local_hud() != null:
+		_local_hud().flash(msgs[mode])
+
+func _local_hud() -> Hud:
+	for p in get_node("Players").get_children():
+		if p.is_local() and p.hud:
+			return p.hud
+	return null
+
+func _totems() -> Array:
+	return get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "totem")
+
+func _wave_kinds_for(biome: String) -> Array:
+	match biome:
+		"highland": return ["bear", "wolf", "wolf"]
+		"meadow": return ["boar", "snake", "wolf"]
+		"shore": return ["wolf", "snake", "wolf"]
+		_: return ["wolf", "wolf", "boar"]
+
+func _spawn_wave() -> void:
+	_wave_names.clear()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = wseed + day * 977
+	var totems := _totems()
+	if totems.is_empty():
+		return
+	var per_totem := mini(4 + hard_nights + hardcore_rounds * 2, 12)
+	for t in totems:
+		var kinds := _wave_kinds_for(biome_at(t.global_position.x, t.global_position.z))
+		for i in per_totem:
+			animal_counter += 1
+			var aname := "a_%d" % animal_counter
+			var ang := rng.randf() * TAU
+			var sp: Vector3 = t.global_position + Vector3(cos(ang), 0, sin(ang)) * rng.randf_range(22.0, 32.0)
+			sp.y = height_at(sp.x, sp.z) + 0.5
+			if sp.y < 0.5:
+				sp = t.global_position + Vector3(cos(ang), 0, sin(ang)) * 12.0
+				sp.y = height_at(sp.x, sp.z) + 0.5
+			rx_spawn_animal.rpc(aname, kinds[i % kinds.size()], sp)
+			var a: Animal = get_node("Animals").get_node(aname)
+			a.raider = true
+			a.raid_target = t.global_position
+			_wave_names.append(aname)
+	rx_wave.rpc(_wave_names.size())
+
+@rpc("authority", "call_local", "reliable")
+func rx_wave(n: int) -> void:
+	if _local_hud():
+		_local_hud().flash("THE ISLAND SENDS %d AGAINST YOUR WALLS." % n)
+	Sfx.play(self, "howl", 0.0)
+
+func _roll_hc_goal() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = wseed + day * 31 + 7
+	_night_deposits = 0
+	match rng.randi() % 3:
+		0:
+			var n := 20 + hardcore_rounds * 8
+			hc_goal = {"kind": "deposit", "n": n, "desc": "Offer %d wood to the totem before dawn" % n}
+		1:
+			hc_goal = {"kind": "slay", "n": 0, "desc": "Slay every raider before dawn"}
+		2:
+			var n2 := 25 + hardcore_rounds * 10
+			hc_goal = {"kind": "stock", "n": n2, "desc": "The totem's stock must hold %d at dawn" % n2}
+	rx_hc_goal.rpc(hc_goal["desc"])
+
+@rpc("authority", "call_local", "reliable")
+func rx_hc_goal(desc: String) -> void:
+	hc_goal["desc"] = desc
+	if _local_hud():
+		_local_hud().flash("TRIAL: %s" % desc)
+
+func _hc_goal_met() -> bool:
+	match hc_goal.get("kind", ""):
+		"deposit":
+			return _night_deposits >= int(hc_goal["n"])
+		"slay":
+			return _wave_names.is_empty()
+		"stock":
+			var totems := _totems()
+			return not totems.is_empty() and totems.any(func(t): return int(t.get_meta("stock")) >= int(hc_goal["n"]))
+	return true
+
+func _on_dawn() -> void:
+	if sealed or game_mode not in ["hard", "hardcore"]:
+		return
+	# the survivors of the night slink away
+	for aname in _wave_names:
+		if get_node("Animals").has_node(aname):
+			rx_animal_dead.rpc(aname)
+	var wave_cleared := true   # you made it to dawn with a totem standing
+	if game_mode == "hard":
+		hard_nights += 1
+		rx_dawn_report.rpc(true, hard_nights, hardcore_rounds,
+			"Dawn. Night %d survived.%s" % [hard_nights,
+			"\nThe totem could drink again… (hardcore awaits)" if hard_nights >= HARD_NIGHTS_TO_HARDCORE else ""])
+		_grant_all({"wood": 10 + hard_nights * 2, "cooked_meat": 2, "iron_bar": maxi(hard_nights - 2, 0)})
+	elif game_mode == "hardcore":
+		if _hc_goal_met():
+			hardcore_rounds += 1
+			if hardcore_rounds >= HARDCORE_ROUNDS_TO_END:
+				_the_end()
+				return
+			rx_dawn_report.rpc(true, hard_nights, hardcore_rounds,
+				"TRIAL PASSED. Round %d of %d." % [hardcore_rounds, HARDCORE_ROUNDS_TO_END])
+			_grant_all({"iron_bar": 3, "moonstone": 1, "cooked_meat": 4, "leviathan_scale": 1})
+		else:
+			var totems := _totems()
+			if not totems.is_empty():
+				Sfx.play_at(self, totems[0].global_position, "roar", 4.0)
+				rx_struct_hp.rpc(String(totems[0].name), 0.0)
+			if totems.size() <= 1:
+				_seal_world()
+				return
+			rx_dawn_report.rpc(false, hard_nights, hardcore_rounds,
+				"TRIAL FAILED. A totem crumbles to ash.\n%d remain." % (totems.size() - 1))
+	_wave_names.clear()
+	save_now()
+
+func _grant_all(items: Dictionary) -> void:
+	for p in get_node("Players").get_children():
+		p.rx_add_items.rpc_id(p.peer_id, items)
+
+@rpc("authority", "call_local", "reliable")
+func rx_dawn_report(passed: bool, hn: int, hr: int, msg: String) -> void:
+	hard_nights = hn
+	hardcore_rounds = hr
+	if _local_hud():
+		_local_hud().flash(msg)
+	Sfx.play(self, "chime" if passed else "thunder", -4.0)
+
+func _the_end() -> void:
+	rx_the_end.rpc()
+	_grant_all({"heart_shard": 1, "leviathan_scale": 3})
+	save_now()
+
+@rpc("authority", "call_local", "reliable")
+func rx_the_end() -> void:
+	game_mode = "ended"
+	peaceful = true
+	if _local_hud():
+		_local_hud().show_the_end()
+
+func _seal_world() -> void:
+	sealed = true
+	rx_sealed.rpc()
+	save_now()
+
+@rpc("authority", "call_local", "reliable")
+func rx_sealed() -> void:
+	sealed = true
+	if _local_hud():
+		_local_hud().show_sealed()
+	Sfx.play(self, "roar", 2.0)
+
 # ================================================================ the depths
 
 var depths_center := Vector3.ZERO
@@ -2272,6 +2477,8 @@ func save_now() -> void:
 		"lev_dead": leviathan_dead,
 		"monolith": get_node("Monolith").get_meta("awakened"),
 		"peaceful": peaceful,
+		"game_mode": game_mode, "hard_nights": hard_nights,
+		"hardcore_rounds": hardcore_rounds, "sealed": sealed,
 	}
 	var f := FileAccess.open(_save_file(), FileAccess.WRITE)
 	f.store_string(JSON.stringify(data))
@@ -2310,6 +2517,10 @@ func _load_save() -> bool:
 		rx_monolith_awakened()
 	if data.get("peaceful", false):
 		rx_heart_restored()
+	sealed = data.get("sealed", false)
+	var gm := String(data.get("game_mode", "story"))
+	if gm != "story":
+		rx_mode(gm, int(data.get("hard_nights", 0)), int(data.get("hardcore_rounds", 0)))
 	leviathan_dead = data.get("lev_dead", false)
 	if not leviathan_dead:
 		for e in data.get("structs", []):
@@ -2336,6 +2547,8 @@ func _process(delta: float) -> void:
 			day += 1
 		if is_night() and not was_night:
 			_on_nightfall()
+		elif was_night and not is_night():
+			_on_dawn()
 		_time_sync_accum += delta
 		if _time_sync_accum >= 2.0:
 			_time_sync_accum = 0.0
@@ -2352,8 +2565,13 @@ func _process(delta: float) -> void:
 	_apply_time_of_day()
 
 func _on_nightfall() -> void:
-	if peaceful:
+	if peaceful or sealed:
 		return   # the heart beats; the island has made its peace
+	if game_mode in ["hard", "hardcore"]:
+		_spawn_wave()
+		if game_mode == "hardcore":
+			_roll_hc_goal()
+		return   # the waves ARE the night now
 	# The island pushes back: more wolves each night.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = wseed + day * 131
@@ -2450,6 +2668,10 @@ func sync_to(peer: int) -> void:
 		rx_monolith_awakened.rpc_id(peer)
 	if peaceful:
 		rx_heart_restored.rpc_id(peer)
+	if game_mode != "story":
+		rx_mode.rpc_id(peer, game_mode, hard_nights, hardcore_rounds)
+	if sealed:
+		rx_sealed.rpc_id(peer)
 	if has_node("Lev") and not get_node("Lev").dying:
 		rx_spawn_leviathan.rpc_id(peer, get_node("Lev").anchor)
 	if weather != "clear":
