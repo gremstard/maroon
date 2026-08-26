@@ -232,7 +232,7 @@ func _scatter_resources() -> void:
 	var deco := Node3D.new()
 	deco.name = "Deco"
 	add_child(deco)
-	for i in 1600:
+	for i in 2600:
 		var x := rng.randf_range(-half, half)
 		var z := rng.randf_range(-half, half)
 		var roll := rng.randf()
@@ -249,15 +249,16 @@ func _scatter_resources() -> void:
 				elif roll < 0.52:
 					kind = "branch"   # driftwood
 			"forest":
-				if roll < 0.40:
+				# a real forest is DENSE — canopies join, the floor is shade
+				if roll < 0.62:
 					kind = "tree"
-				elif roll < 0.56:
+				elif roll < 0.74:
 					kind = "branch"
-				elif roll < 0.66:
+				elif roll < 0.81:
 					kind = "bush"
-				elif roll < 0.72:
+				elif roll < 0.85:
 					kind = "rock"
-				elif roll < 0.78:
+				elif roll < 0.89:
 					kind = "grass"
 			"meadow":
 				if roll < 0.40:
@@ -1506,6 +1507,102 @@ func sv_repair(sname: String) -> void:
 	var s := holder.get_node(sname)
 	rx_struct_hp.rpc(sname, minf(float(s.get_meta("hp")) + 40.0, 400.0))
 
+# ================================================================ weather
+
+var weather := "clear"
+var weather_dim := 1.0
+var _weather_t := 0.0
+var _rain_fx: GPUParticles3D = null
+var _rain_snd: AudioStreamPlayer = null
+var _lightning_t := 0.0
+
+func _weather_tick(delta: float) -> void:
+	# server picks the sky; everyone lives under it
+	_weather_t -= delta
+	if _weather_t > 0.0:
+		return
+	_weather_t = randf_range(150.0, 320.0)
+	var roll := randf()
+	var next := "clear"
+	if roll < 0.20:
+		next = "overcast"
+	elif roll < 0.38:
+		next = "rain"
+	elif roll < 0.48:
+		next = "storm"
+	elif roll < 0.60:
+		next = "fog"
+	if next != weather:
+		rx_weather.rpc(next)
+
+@rpc("authority", "call_local", "reliable")
+func rx_weather(w: String) -> void:
+	weather = w
+	weather_dim = {"clear": 1.0, "overcast": 0.6, "rain": 0.45, "storm": 0.3, "fog": 0.7}[w]
+	var e: Environment = env.environment
+	e.fog_density = {"fog": 0.055, "storm": 0.012, "rain": 0.008}.get(w, 0.002)
+	_apply_time_of_day()
+	var raining := w in ["rain", "storm"]
+	if raining and _rain_fx == null:
+		_rain_fx = GPUParticles3D.new()
+		var pm := ParticleProcessMaterial.new()
+		pm.gravity = Vector3(0, -28.0, 0)
+		pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+		pm.emission_box_extents = Vector3(14, 0.5, 14)
+		_rain_fx.process_material = pm
+		_rain_fx.amount = 700
+		_rain_fx.lifetime = 0.9
+		_rain_fx.visibility_aabb = AABB(Vector3(-20, -30, -20), Vector3(40, 40, 40))
+		var drop := BoxMesh.new()
+		drop.size = Vector3(0.015, 0.45, 0.015)
+		var dm := StandardMaterial3D.new()
+		dm.albedo_color = Color(0.65, 0.75, 0.9, 0.5)
+		dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		drop.material = dm
+		_rain_fx.draw_pass_1 = drop
+		add_child(_rain_fx)
+	if _rain_fx:
+		_rain_fx.emitting = raining
+		_rain_fx.amount_ratio = 1.0 if w == "storm" else 0.6
+	if raining and _rain_snd == null:
+		_rain_snd = Sfx.ambient(self, "wind", -14.0)
+		_rain_snd.pitch_scale = 1.6
+	if _rain_snd:
+		if raining:
+			_rain_snd.volume_db = -8.0 if w == "storm" else -14.0
+			if not _rain_snd.playing:
+				_rain_snd.play()
+		else:
+			_rain_snd.stop()
+	_lightning_t = randf_range(6.0, 16.0)
+
+func _weather_client_tick(delta: float) -> void:
+	# runs on every peer: rain follows your camera; storms throw lightning
+	if _rain_fx and _rain_fx.emitting:
+		var cam := get_viewport().get_camera_3d()
+		if cam:
+			_rain_fx.global_position = cam.global_position + Vector3(0, 12, 0)
+	if weather == "storm":
+		_lightning_t -= delta
+		if _lightning_t <= 0.0:
+			_lightning_t = randf_range(6.0, 18.0)
+			var flash_tw := create_tween()
+			var base := sun.light_energy
+			sun.light_energy = 3.0
+			flash_tw.tween_property(sun, "light_energy", base, 0.25)
+			get_tree().create_timer(randf_range(0.5, 2.0)).timeout.connect(func() -> void:
+				if is_instance_valid(self):
+					Sfx.play(self, "thunder", -2.0))
+
+func _sheltered(s: Node3D) -> bool:
+	for t in get_node("Structures").get_children():
+		if t.get_meta("kind") in ["roof", "slope", "hatched", "floor"] \
+				and Vector2(t.global_position.x - s.global_position.x, t.global_position.z - s.global_position.z).length() < 1.8 \
+				and t.global_position.y > s.global_position.y + 0.5:
+			return true
+	return false
+
 # ================================================================ fire
 
 var _fire_accum := 0.0
@@ -1513,9 +1610,14 @@ var _fire_accum := 0.0
 func _fire_tick() -> void:
 	# Open flames are useful and dangerous — that's the deal.
 	var structs := get_node("Structures").get_children()
+	var raining := weather in ["rain", "storm"]
 	for s in structs:
 		var kind: String = s.get_meta("kind")
 		if kind in ["torch", "campfire"]:
+			if raining and not _sheltered(s):
+				# rain gutters open flame — roof your fires or lose them
+				rx_struct_hp.rpc(String(s.name), float(s.get_meta("hp")) - 6.0)
+				continue
 			for t in structs:
 				if t.get_meta("kind") in GameItems.BUILD_PIECES \
 						and not t.get_meta("burning", false) \
@@ -1528,6 +1630,9 @@ func _fire_tick() -> void:
 						p.rx_damage.rpc_id(p.peer_id, 4.0)
 	for s in structs:
 		if s.get_meta("burning", false):
+			if raining:
+				rx_extinguish.rpc(String(s.name))
+				continue
 			var bt: float = float(s.get_meta("burn_t")) - 2.0
 			s.set_meta("burn_t", bt)
 			rx_struct_hp.rpc(String(s.name), float(s.get_meta("hp")) - 9.0)
@@ -1926,7 +2031,9 @@ func is_night() -> bool:
 	return time_of_day < 5.5 or time_of_day > 20.5
 
 func _process(delta: float) -> void:
+	_weather_client_tick(delta)
 	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_weather_tick(delta)
 		var was_night := is_night()
 		time_of_day += delta * 24.0 / DAY_LENGTH
 		if time_of_day >= 24.0:
@@ -1974,7 +2081,7 @@ func _apply_time_of_day() -> void:
 	var t := (time_of_day - 6.0) / 12.0   # 0 at sunrise, 1 at sunset
 	sun.rotation_degrees = Vector3(-t * 180.0, 30.0, 0)
 	var elevation := sin(t * PI)
-	sun.light_energy = clampf(elevation, 0.03, 1.0)
+	sun.light_energy = clampf(elevation, 0.03, 1.0) * weather_dim
 	sun.light_color = Color(1.0, lerpf(0.55, 0.95, clampf(elevation, 0, 1)), lerpf(0.35, 0.9, clampf(elevation, 0, 1)))
 
 func _decay_tick(delta: float) -> void:
@@ -2044,3 +2151,5 @@ func sync_to(peer: int) -> void:
 		rx_monolith_awakened.rpc_id(peer)
 	if has_node("Lev") and not get_node("Lev").dying:
 		rx_spawn_leviathan.rpc_id(peer, get_node("Lev").anchor)
+	if weather != "clear":
+		rx_weather.rpc_id(peer, weather)

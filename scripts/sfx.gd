@@ -24,6 +24,7 @@ static var RECIPES := {
 	"howl":   {"dur": 0.9, "noise": 0.0, "lp": 0.0, "sine": [260.0, 430.0, 0.3], "vib": [5.0, 12.0], "decay": 1.4, "fade_in": 0.25},
 	"roar":   {"dur": 1.1, "noise": 0.25, "lp": 0.7, "sine": [130.0, 55.0, 0.7], "vib": [3.0, 8.0], "decay": 1.2, "fade_in": 0.1},
 	"wind":   {"dur": 2.5, "noise": 0.5, "lp": 0.85, "decay": 0.0, "loop": true},
+	"thunder": {"dur": 1.4, "noise": 0.4, "lp": 0.8, "sine": [55.0, 30.0, 0.6], "vib": [4.0, 6.0], "decay": 1.8, "fade_in": 0.04},
 }
 
 static func stream(name: String) -> AudioStreamWAV:

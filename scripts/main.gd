@@ -175,6 +175,10 @@ func _ready() -> void:
 			await get_tree().create_timer(0.4).timeout
 			pl._try_fish()
 			await get_tree().create_timer(0.4).timeout
+		if "--shot-storm" in args:
+			world.rx_weather("storm")
+			pl.rotation.y += 2.5   # face the treeline
+			await get_tree().create_timer(1.2).timeout
 		if "--shot-isle" in args:
 			pl.global_position = Vector3(0, 165, 120)
 			pl.velocity = Vector3.ZERO
@@ -920,6 +924,21 @@ func _run_smoke_test() -> void:
 	p._eat("berries")
 	print("[smoke] venom cured: ", p.poisoned_t == 0.0)
 	ok = ok and p.poisoned_t == 0.0
+
+	# weather: rain gutters an unsheltered torch and douses burning walls
+	var tree_count := world.get_node("Resources").get_children().filter(
+		func(r): return r.get_meta("kind") == "tree").size()
+	world.rx_weather("rain")
+	world.sv_place_structure("torch", p.global_position + Vector3(-5, 0, 5), 0.0)
+	await get_tree().create_timer(0.2).timeout
+	var wet_torch: Node = world.get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "torch").back()
+	var torch_hp0: float = wet_torch.get_meta("hp")
+	world._fire_tick()
+	await get_tree().create_timer(0.2).timeout
+	print("[smoke] weather=%s trees=%d torch %0.f->%0.f in rain" % [world.weather, tree_count, torch_hp0, wet_torch.get_meta("hp")])
+	ok = ok and world.weather == "rain" and float(wet_torch.get_meta("hp")) < torch_hp0 and tree_count > 100
+	world.rx_weather("clear")
 
 	# identity: profile roundtrip + appearance applied to the rig
 	var orig_profile := ""

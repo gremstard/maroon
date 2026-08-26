@@ -291,6 +291,21 @@ build. Maroon's pitch on the page: *"the co-op survival island where you
 cannot hurt each other — and the game can be beaten."* M2 follows once
 Maroon 1.0 is out and earning lessons.
 
+## Building v2 (specced, queued — mrrzone)
+- **Pillar foundations**: a foundation is **four logs/pillars**. It places at a
+  set distance on the grid, and **how high you aim is how tall it stands** —
+  the top face accepts floors and roofs. Near existing floors/roofs/
+  foundations it **snaps to their height**. Far spans *require* foundations
+  (unsupported floor/roof = collapse), which makes big houses engineering.
+  Consequence: **stilt houses over water** and **sky houses** — hence
+  **ladders** and **trapdoors**. **Stairs** for multi-floor interiors.
+- **Locks & keys**: crafted **as a pair, permanently bound** — one recipe
+  yields both. Lose the key and it's gone forever… unless you hold the other
+  half: a key can craft a **duplicate lock**, a lock can craft a **duplicate
+  key**. Locks mount on doors and storage. **Brute force is always possible**:
+  locks (like every placeable) have HP — breaking one takes real time and
+  makes serious noise, and progress persists between attempts.
+
 ## Playtest queue (from mrrzone's first sessions)
 Big systems, in build order, each its own pass:
 1. **Building system** — ghost preview, snapping, foundation/floor/wall/
@@ -339,6 +354,19 @@ Big systems, in build order, each its own pass:
   group chat** — groups being small formal bands, which is also what disables
   accidental friendly fire inside them.
 - No wipes — worlds are meant to be kept.
+
+## v0.16 status (this repo)
+Added in 0.16 — **weather** + forest density: server-driven sky cycling
+through clear / overcast / **rain** / **storm** / **fog** (~2.5–5 min spells,
+synced to all peers and late joiners, shown in the clock). Rain: camera-
+following particle rain, dimmed sun, ambient downpour, **unsheltered torches
+and campfires gutter out** (roof your fires) and burning structures are
+doused; ignition can't start in rain. Storm: heavier everything plus
+**lightning + delayed thunder**, and **sailing drifts** — the sea shoves the
+raft. Fog: thick air, and **wolves hunt from much farther than they sound**.
+Forests densified per mrrzone (~2.6k scatter, forest tree share up — canopies
+join now). Building v2 (pillar foundations, stairs/ladders/trapdoors,
+locks & keys) specced and queued.
 
 ## v0.15 status (this repo)
 Added in 0.15 — **fishing + hands & coastline fixes**: **Fishing Rod** (2

@@ -313,8 +313,9 @@ func _aggro_target(world: World) -> Node3D:
 func _ai_wolf(delta: float, world: World) -> void:
 	var target: Node3D = _aggro_target(world)
 	if target == null and world.is_night():
+		var hunt_range := 38.0 if world.weather == "fog" else 25.0   # fog: closer than they sound
 		var near := _nearest_player(world)
-		if near and global_position.distance_to(near.global_position) < 25.0:
+		if near and global_position.distance_to(near.global_position) < hunt_range:
 			target = near
 	if target != null:
 		var to_p := target.global_position - global_position

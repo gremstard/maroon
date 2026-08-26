@@ -653,7 +653,8 @@ func _process(delta: float) -> void:
 	if w:
 		var hh := int(w.time_of_day)
 		var mm := int(fmod(w.time_of_day, 1.0) * 60.0)
-		clock_label.text = "Day %d — %02d:%02d%s" % [w.day, hh, mm, "   << NIGHT — wolves hunt >>" if w.is_night() else ""]
+		var wx: String = {"clear": "", "overcast": "  ☁ overcast", "rain": "  🌧 rain", "storm": "  ⛈ STORM", "fog": "  🌫 fog"}.get(w.weather, "")
+		clock_label.text = "Day %d — %02d:%02d%s%s" % [w.day, hh, mm, wx, "   << NIGHT — wolves hunt >>" if w.is_night() else ""]
 
 	if w:
 		var night_now := w.is_night()

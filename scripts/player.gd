@@ -366,6 +366,10 @@ func _sail(delta: float) -> void:
 		input_dir = Input.get_vector("mv_left", "mv_right", "mv_fwd", "mv_back")
 	var dir := (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
 	global_position += dir * 5.0 * delta
+	if _world().weather == "storm":
+		# the sea has opinions in a storm
+		var tt := Time.get_ticks_msec() * 0.001
+		global_position += Vector3(sin(tt * 0.7) + sin(tt * 1.3), 0, cos(tt * 0.53)) * 2.0 * delta
 	global_position.y = 0.32 + sin(Time.get_ticks_msec() * 0.002) * 0.05
 	velocity = Vector3.ZERO
 	var ground := _world().height_at(global_position.x, global_position.z)
