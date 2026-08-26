@@ -8,7 +8,7 @@ const JUMP := 7.0
 const GRAVITY := 18.0
 const REACH := 3.2
 
-const SLOTS := ["hand", "axe", "pick", "spear", "food", "campfire", "wall", "totem", "beacon", "torch"]
+const SLOTS := ["hand", "axe", "pick", "spear", "food", "campfire", "build", "totem", "beacon", "torch"]
 const CARRY_BASE := 60          # items carried before weight slows you
 
 var peer_id := 1
@@ -104,6 +104,19 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE:
 		if hud:
 			hud.toggle_pause()
+	if in_build_mode() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		if event.is_action_pressed("build_rotate"):
+			_ghost_rot = (_ghost_rot + 1) % 4
+		if event.is_action_pressed("demolish"):
+			var hit := _raycast()
+			if not hit.is_empty() and hit["collider"] is Node and hit["collider"].has_meta("struct"):
+				_world().sv_remove_structure.rpc_id(1, String(hit["collider"].name))
+		if event is InputEventMouseButton and event.pressed:
+			var n := GameItems.BUILD_PIECES.size()
+			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+				build_index = (build_index + 1) % n
+			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+				build_index = (build_index - 1 + n) % n
 
 func _physics_process(delta: float) -> void:
 	if not is_local():
@@ -116,6 +129,7 @@ func _physics_process(delta: float) -> void:
 	swing_cooldown -= delta
 	_survival_tick(delta)
 	_update_viewmodel()
+	_update_ghost()
 	if sailing:
 		_sail(delta)
 		return
@@ -163,6 +177,174 @@ func _physics_process(delta: float) -> void:
 	if _sync_accum >= 0.05 and multiplayer.multiplayer_peer != null:
 		_sync_accum = 0.0
 		rx_state.rpc(global_position, rotation.y, sailing)
+
+# ---------------------------------------------------------------- building
+
+const GHOST_SHAPES := {
+	"foundation": [Vector3(3, 0.5, 3), Vector3(0, -0.25, 0)],
+	"floor":      [Vector3(3, 0.22, 3), Vector3(0, 0.11, 0)],
+	"roof":       [Vector3(3.3, 0.22, 3.3), Vector3(0, 0.11, 0)],
+	"wall":       [Vector3(3, 2.6, 0.22), Vector3(0, 1.3, 0)],
+	"half_wall":  [Vector3(3, 1.3, 0.22), Vector3(0, 0.65, 0)],
+	"doorway":    [Vector3(3, 2.6, 0.22), Vector3(0, 1.3, 0)],
+	"window":     [Vector3(3, 2.6, 0.22), Vector3(0, 1.3, 0)],
+	"gable":      [Vector3(3, 1.5, 0.22), Vector3(0, 0.75, 0)],
+	"slope":      [Vector3(3, 1.5, 3), Vector3(0, 0.75, 0)],
+	"hatched":    [Vector3(3.4, 1.5, 3.4), Vector3(0, 0.75, 0)],
+	"door":       [Vector3(1.16, 2.15, 0.09), Vector3(0.58, 1.1, 0)],
+	"shutter":    [Vector3(1.16, 1.0, 0.07), Vector3(0.58, 1.5, 0)],
+}
+
+var build_index := 0
+var _ghost: MeshInstance3D = null
+var _ghost_kind := ""
+var _ghost_valid := false
+var _ghost_pos := Vector3.ZERO
+var _ghost_yaw := 0.0
+var _ghost_rot := 0
+
+func build_piece_name() -> String:
+	return GameItems.BUILD_PIECES.keys()[build_index]
+
+func in_build_mode() -> bool:
+	return SLOTS[selected_slot] == "build" and owned_tools.has("hammer")
+
+func _update_ghost() -> void:
+	if _ghost and not in_build_mode():
+		_ghost.visible = false
+		return
+	if not in_build_mode():
+		return
+	var kind := build_piece_name()
+	if _ghost == null or _ghost_kind != kind:
+		if _ghost:
+			_ghost.queue_free()
+		_ghost_kind = kind
+		_ghost = MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = GHOST_SHAPES[kind][0]
+		_ghost.mesh = bm
+		var m := StandardMaterial3D.new()
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_ghost.material_override = m
+		var pivot := Node3D.new()
+		pivot.add_child(_ghost)
+		_ghost.position = GHOST_SHAPES[kind][1]
+		_world().add_child(pivot)
+	var hit := _raycast()
+	_ghost_valid = not hit.is_empty() and _compute_ghost(kind, hit)
+	if inv.get("wood", 0) < int(GameItems.BUILD_PIECES[kind]["wood"]):
+		_ghost_valid = false
+	var pivot2 := _ghost.get_parent() as Node3D
+	pivot2.global_position = _ghost_pos
+	pivot2.rotation.y = _ghost_yaw
+	_ghost.visible = not hit.is_empty()
+	var mat: StandardMaterial3D = _ghost.material_override
+	mat.albedo_color = Color(0.3, 1.0, 0.4, 0.4) if _ghost_valid else Color(1.0, 0.25, 0.2, 0.4)
+
+func _piece_at(pos: Vector3, kind: String) -> bool:
+	for s in _world().get_node("Structures").get_children():
+		if s.get_meta("kind") == kind and s.global_position.distance_to(pos) < 0.6:
+			return true
+	return false
+
+func _snap3(v: float) -> float:
+	return roundf(v / 3.0) * 3.0
+
+func _compute_ghost(kind: String, hit: Dictionary) -> bool:
+	var col: Object = hit["collider"]
+	var hpos: Vector3 = hit["position"]
+	var w := _world()
+	_ghost_yaw = 0.0
+	if kind == "foundation":
+		if col is Node and col.has_meta("struct") and col.get_meta("kind") == "foundation":
+			# extend from an existing foundation toward where you're aiming
+			var base := col as Node3D
+			var d := hpos - base.global_position
+			var off := Vector3(3, 0, 0) * signf(d.x) if absf(d.x) > absf(d.z) else Vector3(0, 0, 3) * signf(d.z)
+			_ghost_pos = base.global_position + off
+			return not _piece_at(_ghost_pos, "foundation")
+		if col is Node and (col.has_meta("struct") or col.has_meta("res") or col.has_meta("animal")):
+			return false
+		var cx := _snap3(hpos.x)
+		var cz := _snap3(hpos.z)
+		var top := -99.0
+		var lo := 99.0
+		for corner in [Vector2(-1.5, -1.5), Vector2(1.5, -1.5), Vector2(1.5, 1.5), Vector2(-1.5, 1.5)]:
+			var h := w.height_at(cx + corner.x, cz + corner.y)
+			top = maxf(top, h)
+			lo = minf(lo, h)
+		if lo < 0.3 or top - lo > 2.2:
+			return false
+		_ghost_pos = Vector3(cx, top + 0.3, cz)
+		return not _piece_at(_ghost_pos, "foundation")
+	if kind == "door" or kind == "shutter":
+		var want := "doorway" if kind == "door" else "window"
+		if col is Node and col.has_meta("struct") and col.get_meta("kind") == want:
+			var frame := col as Node3D
+			_ghost_pos = frame.global_position + frame.global_transform.basis.x * -0.6
+			_ghost_yaw = frame.rotation.y
+			return not _piece_at(_ghost_pos, kind)
+		return false
+	# everything else builds off an existing piece
+	if not (col is Node and col.has_meta("struct")):
+		return false
+	var base2 := col as Node3D
+	var bkind: String = base2.get_meta("kind")
+	var cell_x: float
+	var cell_z: float
+	var level_y: float
+	if bkind == "foundation" or bkind == "floor":
+		if bkind == "floor" and kind in ["floor", "roof", "slope", "hatched"]:
+			# extend sideways at the same level
+			var d2 := hpos - base2.global_position
+			var off2 := Vector3(3, 0, 0) * signf(d2.x) if absf(d2.x) > absf(d2.z) else Vector3(0, 0, 3) * signf(d2.z)
+			_ghost_pos = base2.global_position + off2
+			_ghost_yaw = _ghost_rot * PI / 2.0
+			return not _piece_at(_ghost_pos, kind)
+		cell_x = base2.global_position.x
+		cell_z = base2.global_position.z
+		level_y = base2.global_position.y + (0.22 if bkind == "floor" else 0.0)
+	elif bkind in ["wall", "doorway", "window", "half_wall", "gable"]:
+		var n := base2.global_transform.basis.z
+		var side := -1.0 if n.dot(global_position - base2.global_position) > 0.0 else 1.0
+		cell_x = _snap3(base2.global_position.x + n.x * 1.5 * side)
+		cell_z = _snap3(base2.global_position.z + n.z * 1.5 * side)
+		level_y = base2.global_position.y + (1.3 if bkind == "half_wall" else 2.6)
+	else:
+		return false
+	if kind in ["floor", "roof", "slope", "hatched"]:
+		if bkind == "foundation":
+			return false   # the foundation already is your floor
+		_ghost_pos = Vector3(cell_x, level_y, cell_z)
+		_ghost_yaw = _ghost_rot * PI / 2.0
+		return not _piece_at(_ghost_pos, kind)
+	# wall family: snap to the cell edge you're aiming at
+	var lx := hpos.x - cell_x
+	var lz := hpos.z - cell_z
+	if absf(lx) > absf(lz):
+		_ghost_pos = Vector3(cell_x + 1.5 * signf(lx), level_y, cell_z)
+		_ghost_yaw = PI / 2.0
+	else:
+		_ghost_pos = Vector3(cell_x, level_y, cell_z + 1.5 * signf(lz))
+		_ghost_yaw = 0.0
+	return not _piece_at(_ghost_pos, kind)
+
+func _try_place_piece() -> void:
+	if not owned_tools.has("hammer"):
+		if hud:
+			hud.flash("Craft a Hammer first (Tab) — then build straight from wood.")
+		return
+	if not _ghost_valid:
+		if hud:
+			hud.flash("Can't build there. Foundations go on open ground; the rest snaps to them.")
+		return
+	var kind := build_piece_name()
+	inv["wood"] -= int(GameItems.BUILD_PIECES[kind]["wood"])
+	if kind in ["wall", "half_wall", "doorway", "window", "gable"]:
+		events["wall_built"] = events.get("wall_built", 0) + 1
+	_world().sv_place_structure.rpc_id(1, kind, _ghost_pos, _ghost_yaw)
 
 # ---------------------------------------------------------------- sailing
 
@@ -703,6 +885,9 @@ func _use_selected() -> void:
 	if slot == "food":
 		_eat()
 		return
+	if slot == "build":
+		_try_place_piece()
+		return
 	if slot in GameItems.PLACEABLES:
 		_place(slot)
 		return
@@ -855,6 +1040,16 @@ func _interact() -> void:
 					hud.flash("Cooked meat over the fire.")
 			elif hud:
 				hud.flash("No raw meat to cook. Hunt a deer.")
+		elif kind in ["door", "shutter"]:
+			_world().sv_toggle_door.rpc_id(1, String(col.name))
+		elif in_build_mode() and kind in GameItems.BUILD_PIECES:
+			if inv.get("wood", 0) >= 1:
+				inv["wood"] -= 1
+				_world().sv_repair.rpc_id(1, String(col.name))
+				if hud:
+					hud.flash("Patched it up.")
+			elif hud:
+				hud.flash("Repairs take wood.")
 		elif kind == "totem":
 			var deposit: int = mini(inv.get("wood", 0), 5)
 			if deposit > 0:

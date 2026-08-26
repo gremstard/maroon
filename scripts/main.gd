@@ -107,6 +107,32 @@ func _ready() -> void:
 			pl.head.rotation.x = 0.06
 			pl._set_sailing(true)
 			await get_tree().create_timer(0.5).timeout
+		if "--shot-build" in args:
+			for a in world.get_node("Animals").get_children():
+				if a.global_position.distance_to(pl.global_position) < 18.0:
+					a.queue_free()
+			var fwd2: Vector3 = -pl.head.global_transform.basis.z
+			fwd2.y = 0
+			fwd2 = fwd2.normalized()
+			var bp := pl.global_position + fwd2 * 7.0
+			bp = Vector3(roundf(bp.x / 3.0) * 3.0, 0, roundf(bp.z / 3.0) * 3.0)
+			var top := world.height_at(bp.x, bp.z) + 0.3
+			bp.y = top
+			world.sv_place_structure("foundation", bp, 0.0)
+			world.sv_place_structure("wall", bp + Vector3(-1.5, 0, 0), PI / 2)
+			world.sv_place_structure("wall", bp + Vector3(1.5, 0, 0), PI / 2)
+			world.sv_place_structure("wall", bp + Vector3(0, 0, 1.5), 0.0)
+			world.sv_place_structure("window", bp + Vector3(1.5, 0, 0), PI / 2)
+			world.sv_place_structure("doorway", bp + Vector3(0, 0, -1.5), 0.0)
+			world.sv_place_structure("hatched", bp + Vector3(0, 2.6, 0), 0.0)
+			await get_tree().create_timer(0.3).timeout
+			for s in world.get_node("Structures").get_children():
+				if s.get_meta("kind") == "doorway":
+					world.sv_place_structure("door", s.global_position + s.global_transform.basis.x * -0.6, 0.0)
+			pl.owned_tools["hammer"] = true
+			pl.inv["wood"] = 40
+			pl.selected_slot = 6   # build mode, ghost visible
+			await get_tree().create_timer(0.5).timeout
 		if "--shot-lev" in args:
 			world._summon_leviathan()
 			await get_tree().create_timer(4.0).timeout
@@ -147,6 +173,7 @@ func _register_inputs() -> void:
 		"slot_1": KEY_1, "slot_2": KEY_2, "slot_3": KEY_3, "slot_4": KEY_4,
 		"slot_5": KEY_5, "slot_6": KEY_6, "slot_7": KEY_7, "slot_8": KEY_8,
 		"slot_9": KEY_9, "slot_10": KEY_0,
+		"build_rotate": KEY_R, "demolish": KEY_X,
 	}
 	for action in keys:
 		if not InputMap.has_action(action):
@@ -801,8 +828,37 @@ func _run_smoke_test() -> void:
 
 	# placing + totem stock
 	world.sv_place_structure("totem", p.global_position + Vector3(2, 0, 0), 0.0)
-	world.sv_place_structure("wall", p.global_position + Vector3(4, 0, 0), 0.0)
 	await get_tree().create_timer(0.2).timeout
+
+	# building system: hammer -> foundation -> wall -> doorway -> door swings
+	p.inv["wood"] = 80
+	p.inv["stone"] = p.inv.get("stone", 0) + 2
+	p.inv["string"] = p.inv.get("string", 0) + 1
+	p.craft("hammer")
+	ok = ok and p.owned_tools.has("hammer")
+	var bpos := p.global_position + Vector3(8, 0.3, 0)
+	world.sv_place_structure("foundation", bpos, 0.0)
+	world.sv_place_structure("wall", bpos + Vector3(0, 0, 1.5), 0.0)
+	world.sv_place_structure("doorway", bpos + Vector3(0, 0, -1.5), 0.0)
+	await get_tree().create_timer(0.2).timeout
+	var doorway := world.get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "doorway")
+	ok = ok and doorway.size() == 1
+	var dw: Node3D = doorway[0]
+	world.sv_place_structure("door", dw.global_position + dw.global_transform.basis.x * -0.6, 0.0)
+	await get_tree().create_timer(0.2).timeout
+	var doors := world.get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "door")
+	ok = ok and doors.size() == 1
+	world.sv_toggle_door(doors[0].name)
+	await get_tree().create_timer(0.4).timeout
+	print("[smoke] build: pieces placed, door open=%s" % doors[0].get_meta("open"))
+	ok = ok and doors[0].get_meta("open") == true
+	var pre_wood: int = p.inv.get("wood", 0)
+	world.sv_remove_structure(doors[0].name)
+	await get_tree().create_timer(0.2).timeout
+	print("[smoke] demolish: refund=%d wood" % [p.inv.get("wood", 0) - pre_wood])
+	ok = ok and p.inv.get("wood", 0) == pre_wood + 2
 	var totem := world.get_node("Structures").get_children().filter(
 		func(s): return s.get_meta("kind") == "totem")
 	ok = ok and totem.size() == 1

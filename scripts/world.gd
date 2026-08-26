@@ -638,19 +638,8 @@ func rx_place_structure(sname: String, kind: String, pos: Vector3, yaw: float) -
 			cs.height = 0.6
 			shape.shape = cs
 			shape.position.y = 0.3
-		"wall":
-			body.set_meta("hp", 200.0)
-			var mi := MeshInstance3D.new()
-			var bm := BoxMesh.new()
-			bm.size = Vector3(3.0, 2.6, 0.3)
-			mi.mesh = bm
-			mi.material_override = _flat_mat(Color(0.5, 0.38, 0.24))
-			mi.position.y = 1.3
-			body.add_child(mi)
-			var bs := BoxShape3D.new()
-			bs.size = Vector3(3.0, 2.6, 0.3)
-			shape.shape = bs
-			shape.position.y = 1.3
+		"wall", "foundation", "floor", "half_wall", "doorway", "window", "gable", "roof", "slope", "hatched", "door", "shutter":
+			_build_piece(body, shape, kind, yaw)
 		"torch":
 			body.set_meta("hp", 40.0)
 			var stick := MeshInstance3D.new()
@@ -1086,6 +1075,164 @@ func rx_chest_opened() -> void:
 	for c in chest.get_children():
 		if c is MeshInstance3D:
 			c.material_override = _flat_mat(Color(0.22, 0.16, 0.09))
+
+# ================================================================ building pieces
+
+func _piece_box(body: Node3D, size: Vector3, c: Color, pos: Vector3, with_shape := true) -> void:
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	mi.material_override = _flat_mat(c)
+	mi.position = pos
+	body.add_child(mi)
+	if with_shape:
+		var cs := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = size
+		cs.shape = bs
+		cs.position = pos
+		body.add_child(cs)
+
+func _build_piece(body: StaticBody3D, shape: CollisionShape3D, kind: String, yaw: float) -> void:
+	var wood := Color(0.50, 0.38, 0.24)
+	var wood_dark := Color(0.40, 0.29, 0.17)
+	var thatch := Color(0.68, 0.60, 0.34)
+	var hp: float = {"foundation": 250.0, "wall": 150.0, "door": 100.0, "shutter": 60.0}.get(kind, 120.0)
+	body.set_meta("hp", hp)
+	body.set_meta("base_yaw", yaw)
+	match kind:
+		"foundation":
+			body.set_meta("top_y", 0.0)   # top is at body origin
+			_piece_box(body, Vector3(3, 0.5, 3), wood_dark, Vector3(0, -0.25, 0))
+		"floor":
+			_piece_box(body, Vector3(3, 0.22, 3), wood, Vector3(0, 0.11, 0))
+		"roof":
+			_piece_box(body, Vector3(3.3, 0.22, 3.3), wood_dark, Vector3(0, 0.11, 0))
+		"wall":
+			_piece_box(body, Vector3(3, 2.6, 0.22), wood, Vector3(0, 1.3, 0))
+		"half_wall":
+			_piece_box(body, Vector3(3, 1.3, 0.22), wood, Vector3(0, 0.65, 0))
+		"doorway":
+			_piece_box(body, Vector3(0.9, 2.6, 0.22), wood, Vector3(-1.05, 1.3, 0))
+			_piece_box(body, Vector3(0.9, 2.6, 0.22), wood, Vector3(1.05, 1.3, 0))
+			_piece_box(body, Vector3(1.2, 0.5, 0.22), wood, Vector3(0, 2.35, 0))
+		"window":
+			_piece_box(body, Vector3(0.9, 2.6, 0.22), wood, Vector3(-1.05, 1.3, 0))
+			_piece_box(body, Vector3(0.9, 2.6, 0.22), wood, Vector3(1.05, 1.3, 0))
+			_piece_box(body, Vector3(1.2, 1.0, 0.22), wood, Vector3(0, 0.5, 0))
+			_piece_box(body, Vector3(1.2, 0.5, 0.22), wood, Vector3(0, 2.35, 0))
+		"gable":
+			var mi := MeshInstance3D.new()
+			var pm := PrismMesh.new()
+			pm.size = Vector3(3, 1.5, 0.22)
+			mi.mesh = pm
+			mi.material_override = _flat_mat(wood)
+			mi.position.y = 0.75
+			body.add_child(mi)
+			var cs := CollisionShape3D.new()
+			cs.shape = pm.create_convex_shape()
+			cs.position.y = 0.75
+			body.add_child(cs)
+		"slope":
+			var mi := MeshInstance3D.new()
+			var pm := PrismMesh.new()
+			pm.size = Vector3(3, 1.5, 3)
+			pm.left_to_right = 1.0
+			mi.mesh = pm
+			mi.material_override = _flat_mat(wood_dark)
+			mi.position.y = 0.75
+			body.add_child(mi)
+			var cs := CollisionShape3D.new()
+			cs.shape = pm.create_convex_shape()
+			cs.position.y = 0.75
+			body.add_child(cs)
+		"hatched":
+			var mi := MeshInstance3D.new()
+			var pm := PrismMesh.new()
+			pm.size = Vector3(3.4, 1.5, 3.4)
+			mi.mesh = pm
+			mi.material_override = _flat_mat(thatch)
+			mi.position.y = 0.75
+			body.add_child(mi)
+			var cs := CollisionShape3D.new()
+			cs.shape = pm.create_convex_shape()
+			cs.position.y = 0.75
+			body.add_child(cs)
+		"door":
+			# body origin = hinge; panel hangs to +x, swings on toggle
+			body.set_meta("open", false)
+			_piece_box(body, Vector3(1.16, 2.15, 0.09), wood_dark, Vector3(0.58, 1.1, 0))
+			var knob := MeshInstance3D.new()
+			var km := SphereMesh.new()
+			km.radius = 0.05
+			km.height = 0.1
+			knob.mesh = km
+			knob.material_override = _flat_mat(Color(0.3, 0.3, 0.32))
+			knob.position = Vector3(1.0, 1.1, -0.08)
+			body.add_child(knob)
+		"shutter":
+			body.set_meta("open", false)
+			_piece_box(body, Vector3(1.16, 1.0, 0.07), wood_dark, Vector3(0.58, 1.5, 0))
+	# the primary shape node is unused for pieces (each box brings its own)
+	shape.disabled = true
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_toggle_door(sname: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	if s.get_meta("kind") not in ["door", "shutter"]:
+		return
+	rx_door.rpc(sname, not s.get_meta("open"))
+
+@rpc("authority", "call_local", "reliable")
+func rx_door(sname: String, open: bool) -> void:
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	s.set_meta("open", open)
+	var target: float = float(s.get_meta("base_yaw")) + (1.9 if open else 0.0)
+	var tw := s.create_tween()
+	tw.tween_property(s, "rotation:y", target, 0.25).set_trans(Tween.TRANS_SINE)
+	Sfx.play_at(self, s.global_position, "place", -14.0)
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_remove_structure(sname: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender == 0:
+		sender = 1
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var kind: String = holder.get_node(sname).get_meta("kind")
+	if kind == "totem":
+		return   # totems fall to decay, not hammers
+	if kind in GameItems.BUILD_PIECES:
+		_grant_items(sender, {"wood": int(GameItems.BUILD_PIECES[kind]["wood"] / 2.0)})
+	rx_remove_structure.rpc(sname)
+
+@rpc("authority", "call_local", "reliable")
+func rx_remove_structure(sname: String) -> void:
+	var holder := get_node("Structures")
+	if holder.has_node(sname):
+		holder.get_node(sname).queue_free()
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_repair(sname: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	rx_struct_hp.rpc(sname, minf(float(s.get_meta("hp")) + 40.0, 400.0))
 
 # ================================================================ the sea cave
 

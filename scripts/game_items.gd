@@ -10,7 +10,6 @@ const RECIPES := {
 	"stone_pick": {"wood": 4, "stone": 6, "string": 2},
 	"torch":      {"branch": 1, "fiber": 2},
 	"campfire":   {"wood": 8, "stone": 4},
-	"wall":       {"wood": 6},
 	"totem":      {"wood": 20, "stone": 10},
 	"forge":      {"stone": 20, "wood": 10},
 	"beacon":     {"wood": 10, "iron_ore": 3, "string": 2, "ancient_lens": 1},
@@ -34,9 +33,29 @@ const RECIPES := {
 	"scale_helm":  {"leviathan_scale": 2, "hide": 1},
 	"scale_chest": {"leviathan_scale": 3, "hide": 2},
 	"raft":       {"wood": 20, "string": 4, "moonstone": 1},
+	"hammer":     {"wood": 4, "stone": 2, "string": 1},
 }
 
-const PLACEABLES := ["torch", "campfire", "wall", "totem", "forge", "beacon"]
+# Building pieces are placed straight from raw wood (Rust-style), not crafted.
+# Snap to a 3 m grid; walls are 2.6 m tall. Requires a hammer.
+const BUILD_PIECES := {
+	"foundation": {"wood": 8},
+	"floor":      {"wood": 6},
+	"wall":       {"wood": 6},
+	"half_wall":  {"wood": 3},
+	"doorway":    {"wood": 5},
+	"window":     {"wood": 5},
+	"gable":      {"wood": 4},
+	"roof":       {"wood": 6},
+	"slope":      {"wood": 6},
+	"hatched":    {"wood": 7},
+	"door":       {"wood": 4},
+	"shutter":    {"wood": 2},
+}
+const BCELL := 3.0
+const BWALL_H := 2.6
+
+const PLACEABLES := ["torch", "campfire", "totem", "forge", "beacon"]
 const MATERIALS := ["string", "iron_bar"]   # crafted items that go back into the inventory
 const FORGE_ONLY := ["iron_bar", "iron_axe", "iron_pick", "iron_spear",
 	"iron_helm", "iron_chest", "scale_helm", "scale_chest"]
@@ -85,6 +104,11 @@ const NICE_NAMES := {
 	"leviathan_scale": "Leviathan Scale",
 	"hide": "Hide", "iron_bar": "Iron Bar", "forge": "Forge",
 	"torch": "Torch", "moonstone": "Moonstone", "raft": "Raft",
+	"hammer": "Hammer", "foundation": "Foundation", "floor": "Floor",
+	"half_wall": "Half Wall", "doorway": "Doorway", "window": "Window Wall",
+	"gable": "Gable", "roof": "Roof", "slope": "Sloped Roof",
+	"hatched": "Hatched Roof",
+	"door": "Door", "shutter": "Shutters",
 	"iron_axe": "Iron Axe", "iron_pick": "Iron Pick", "iron_spear": "Iron Spear",
 	"fiber_cap": "Fiber Cap", "fiber_tunic": "Fiber Tunic",
 	"fiber_leggings": "Fiber Leggings", "woven_pack": "Woven Pack",

@@ -253,11 +253,35 @@ Big systems, in build order, each its own pass:
    colored clothing; crafted shirts/pants as the *only* way to be dressed.
 4. **Environment depth** — broadleaf + birch trees, fallen-leaf litter, twigs,
    varied rocks, ponds/streams, richer ground cover. Realism is the bar.
+5. **Advanced crafting stations** — **furnace** (burns wood → charcoal;
+   charcoal keeps fires fed and smelts iron better), **workbench** (gates
+   higher recipes). Forge stays the metalworking station.
+6. **Storage & decor** — storage as placeables with real inventories:
+   **chest** (proper-looking), **crate**, **cabinet**, **drawers**; decor
+   starting with **paintings** (player-pickable art?), rugs, trophies
+   (Leviathan head over the door).
+7. **Lighting overhaul** — **torch**: holdable (lights around you while held),
+   placeable on floor OR wall, **throwable**, but open flame: chance to set
+   structures/grass/you on fire (campfires too — fire spread as a system).
+   **Iron lamp**: costs iron, can't be thrown, zero fire risk, and lights
+   around you passively *while merely in your inventory*. Safety is what the
+   iron buys.
 - Maroon stays: PnPvE, 5–8 friends, tech ceiling at iron/scale (never a gun),
   beatable, then peaceful. No raiding of claims. No chat/comms of any kind.
 - No wipes — worlds are meant to be kept.
 
-## v0.9 status (this repo)
+## v0.10 status (this repo)
+Added in v0.10 — **the building system**: craft a **Hammer**, select the build
+slot (7), and build straight from raw wood. 12 pieces on a 3 m grid —
+foundation (snaps to terrain, extends edge-to-edge), wall, half wall, doorway,
+window wall, gable, floor, flat roof, sloped roof, hatched roof, **doors**
+(snap into doorways, swing open on E), **shutters** (snap into windows).
+Ghost preview (green/red validity + cost check), scroll to cycle pieces,
+R rotates, E repairs (1 wood), X demolishes (half refund). Old freestanding
+wall placeable retired. Also: playtest queue notes for furnace/charcoal,
+workbench, storage units, decor, and the torch/lamp lighting overhaul.
+
+## v0.9 status
 **Shippable**: `build.sh` exports Maroon-macOS.zip (universal) and
 Maroon-Windows.exe (single file, embedded pack) — unsigned testing builds.
 

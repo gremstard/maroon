@@ -247,6 +247,8 @@ func _slot_status(slot: String) -> Array:
 		"food":
 			var n: int = player.inv.get("cooked_meat", 0) + player.inv.get("berries", 0) + player.inv.get("raw_meat", 0)
 			return [n > 0, " ×%d" % n if n > 0 else ""]
+		"build":
+			return [player.owned_tools.has("hammer"), ""]
 		_:
 			var c: int = player.inv.get(slot, 0)
 			return [c > 0, " ×%d" % c if c > 0 else ""]
@@ -292,10 +294,15 @@ func _process(delta: float) -> void:
 	var status := "\nArmor: %d%%   Carry: %d/%d%s" % [
 		int(player.armor_total() * 100), player.carry_weight(), player.carry_cap(),
 		"  (OVERLOADED — slowed)" if player.weight_mult() < 1.0 else ""]
+	var build_line := ""
+	if Player.SLOTS[player.selected_slot] == "build" and player.owned_tools.has("hammer"):
+		var piece := player.build_piece_name()
+		build_line = "\nBUILD: %s (%d wood)   scroll: piece · R: rotate · click: place · E: repair/doors · X: demolish" % [
+			GameItems.nice(piece), GameItems.BUILD_PIECES[piece]["wood"]]
 	inv_label.text = "  ".join(inv_lines) \
 		+ ("\nTools: " + ", ".join(tools) if tools.size() > 0 else "") \
 		+ ("\nWearing: " + ", ".join(gear) if gear.size() > 0 else "") \
-		+ status
+		+ status + build_line
 
 	var w := _world()
 	if w:

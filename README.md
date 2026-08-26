@@ -81,6 +81,11 @@ A moonstone from the **Sea Cave** builds a **raft** — wade into the shallows,
 press E, and sail past the reef to the **Far Isle**: richer, meaner, and home
 to a monolith that wants three moonstones.
 
+**Building**: craft a Hammer, press 7 for build mode — foundations snap to the
+ground, everything else snaps to them. Scroll = piece, R = rotate, click =
+place, E = repair (and open doors), X = demolish. Doors fit doorways,
+shutters fit window walls. Build from raw wood in your pack.
+
 Your world **saves automatically** — host the same seed again to continue it.
 You cannot hurt other survivors. The game won't let you. That's the point.
 
