@@ -175,6 +175,27 @@ func _ready() -> void:
 			await get_tree().create_timer(0.4).timeout
 			pl._try_fish()
 			await get_tree().create_timer(0.4).timeout
+		if "--shot-stilt" in args:
+			var wdir := Vector3(pl.global_position.x, 0, pl.global_position.z).normalized()
+			var wp := Vector3.ZERO
+			for r in range(6, 90, 3):
+				var cand: Vector3 = pl.global_position + wdir * r
+				if world.height_at(cand.x, cand.z) < -0.8:
+					wp = Vector3(roundf(cand.x / 3.0) * 3.0, 1.5, roundf(cand.z / 3.0) * 3.0)
+					break
+			world.sv_place_structure("foundation", wp, 0.0)
+			world.sv_place_structure("wall", wp + Vector3(-1.5, 0, 0), PI / 2)
+			world.sv_place_structure("wall", wp + Vector3(0, 0, 1.5), 0.0)
+			world.sv_place_structure("doorway", wp + Vector3(1.5, 0, 0), PI / 2)
+			world.sv_place_structure("hatched", wp + Vector3(0, 2.6, 0), 0.0)
+			world.sv_place_structure("ladder", wp + Vector3(0, 0, -1.42), 0.0)
+			await get_tree().create_timer(0.4).timeout
+			var back := wp + Vector3(wdir.x, 0, wdir.z) * -12.0
+			pl.global_position = Vector3(back.x, world.height_at(back.x, back.z) + 1.2, back.z)
+			var to_hut: Vector3 = wp - pl.global_position
+			pl.rotation.y = atan2(-to_hut.x, -to_hut.z)
+			pl.head.rotation.x = 0.06
+			await get_tree().create_timer(0.4).timeout
 		if "--shot-storm" in args:
 			world.rx_weather("storm")
 			pl.rotation.y += 2.5   # face the treeline
@@ -1001,6 +1022,34 @@ func _run_smoke_test() -> void:
 	await get_tree().create_timer(0.2).timeout
 	print("[smoke] demolish: refund=%d wood" % [p.inv.get("wood", 0) - pre_wood])
 	ok = ok and p.inv.get("wood", 0) == pre_wood + 2
+
+	# building v2: stilt foundation over water, stairs, ladder, trapdoor
+	var water_p := Vector3.ZERO
+	for r in range(8, 120, 4):
+		var cand := p.global_position + Vector3(r, 0, 0)
+		if world.height_at(cand.x, cand.z) < -0.6:
+			water_p = Vector3(roundf(cand.x / 3.0) * 3.0, 1.4, roundf(cand.z / 3.0) * 3.0)
+			break
+	ok = ok and water_p != Vector3.ZERO
+	world.sv_place_structure("foundation", water_p, 0.0)
+	world.sv_place_structure("stairs", bpos + Vector3(3, 0, 0), 0.0)
+	world.sv_place_structure("trapdoor", bpos + Vector3(0, 2.6, 0), 0.0)
+	await get_tree().create_timer(0.2).timeout
+	var stilt: Node = world.get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "foundation").back()
+	var pillars := stilt.get_children().filter(func(c): return c is MeshInstance3D and c.mesh is CylinderMesh)
+	var trap: Node = world.get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "trapdoor").back()
+	world.sv_toggle_door(trap.name)
+	await get_tree().create_timer(0.4).timeout
+	world.sv_place_structure("ladder", bpos + Vector3(0, 0, -1.7), 0.0)
+	await get_tree().create_timer(0.2).timeout
+	var has_ladder: bool = world.get_node("Structures").get_children().any(
+		func(s): return s.get_meta("kind") == "ladder")
+	print("[smoke] build v2: stilt pillars=%d trapdoor_open=%s ladder=%s stairs=%s" % [
+		pillars.size(), trap.get_meta("open"), has_ladder,
+		world.get_node("Structures").get_children().any(func(s): return s.get_meta("kind") == "stairs")])
+	ok = ok and pillars.size() == 4 and trap.get_meta("open") == true and has_ladder
 
 	# cloth & dye: dry grass all the way to a yellow shirt
 	world.sv_place_structure("workbench", p.global_position + Vector3(3, 0, -3), 0.0)

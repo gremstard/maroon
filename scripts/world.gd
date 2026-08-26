@@ -782,8 +782,8 @@ func rx_place_structure(sname: String, kind: String, pos: Vector3, yaw: float) -
 			cs.height = 0.6
 			shape.shape = cs
 			shape.position.y = 0.3
-		"wall", "foundation", "floor", "half_wall", "doorway", "window", "gable", "roof", "slope", "hatched", "door", "shutter":
-			_build_piece(body, shape, kind, yaw)
+		"wall", "foundation", "floor", "half_wall", "doorway", "window", "gable", "roof", "slope", "hatched", "door", "shutter", "stairs", "ladder", "trapdoor":
+			_build_piece(body, shape, kind, yaw, pos)
 		"torch":
 			body.set_meta("hp", 40.0)
 			var stick := MeshInstance3D.new()
@@ -1367,17 +1367,79 @@ func _piece_box(body: Node3D, size: Vector3, c: Color, pos: Vector3, with_shape 
 		cs.position = pos
 		body.add_child(cs)
 
-func _build_piece(body: StaticBody3D, shape: CollisionShape3D, kind: String, yaw: float) -> void:
+func _build_piece(body: StaticBody3D, shape: CollisionShape3D, kind: String, yaw: float, pos: Vector3) -> void:
 	var wood := Color(0.50, 0.38, 0.24)
 	var wood_dark := Color(0.40, 0.29, 0.17)
 	var thatch := Color(0.68, 0.60, 0.34)
-	var hp: float = {"foundation": 250.0, "wall": 150.0, "door": 100.0, "shutter": 60.0}.get(kind, 120.0)
+	var hp: float = {"foundation": 250.0, "wall": 150.0, "door": 100.0, "shutter": 60.0, "ladder": 60.0, "trapdoor": 80.0}.get(kind, 120.0)
 	body.set_meta("hp", hp)
 	body.set_meta("base_yaw", yaw)
 	match kind:
 		"foundation":
-			body.set_meta("top_y", 0.0)   # top is at body origin
-			_piece_box(body, Vector3(3, 0.5, 3), wood_dark, Vector3(0, -0.25, 0))
+			# four pillars from the deck down to whatever ground (or seabed)
+			# each corner finds — stilt houses are houses too
+			body.set_meta("top_y", 0.0)
+			_piece_box(body, Vector3(2.9, 0.22, 2.9), wood, Vector3(0, -0.11, 0))
+			for edge in [Vector3(0, -0.14, 1.42), Vector3(0, -0.14, -1.42)]:
+				_piece_box(body, Vector3(3.0, 0.3, 0.24), wood_dark, edge, false)
+			for edge2 in [Vector3(1.42, -0.14, 0), Vector3(-1.42, -0.14, 0)]:
+				_piece_box(body, Vector3(0.24, 0.3, 3.0), wood_dark, edge2, false)
+			for corner in [Vector2(1.32, 1.32), Vector2(-1.32, 1.32), Vector2(1.32, -1.32), Vector2(-1.32, -1.32)]:
+				var local := Vector3(corner.x, 0, corner.y).rotated(Vector3.UP, yaw)
+				var ground := height_at(pos.x + local.x, pos.z + local.z)
+				var len := clampf(pos.y - ground, 0.6, 40.0)
+				var pillar := MeshInstance3D.new()
+				var pm := CylinderMesh.new()
+				pm.top_radius = 0.13
+				pm.bottom_radius = 0.15
+				pm.height = len
+				pillar.mesh = pm
+				pillar.material_override = _flat_mat(wood_dark)
+				pillar.position = Vector3(corner.x, -len * 0.5, corner.y)
+				body.add_child(pillar)
+				var pcs := CollisionShape3D.new()
+				var pshape := CylinderShape3D.new()
+				pshape.radius = 0.15
+				pshape.height = len
+				pcs.shape = pshape
+				pcs.position = pillar.position
+				body.add_child(pcs)
+		"stairs":
+			var step_h := 2.6 / 4.0
+			for i2 in 4:
+				_piece_box(body, Vector3(3.0, step_h, 0.75), wood if i2 % 2 == 0 else wood_dark,
+					Vector3(0, step_h * (i2 + 0.5), 1.125 - 0.75 * i2), false)
+			var smesh := PrismMesh.new()
+			smesh.size = Vector3(3, 2.6, 3)
+			smesh.left_to_right = 1.0
+			var scs := CollisionShape3D.new()
+			scs.shape = smesh.create_convex_shape()
+			scs.position.y = 1.3
+			scs.rotation_degrees.y = -90
+			body.add_child(scs)
+		"ladder":
+			for rail_x in [-0.26, 0.26]:
+				_piece_box(body, Vector3(0.07, 2.6, 0.07), wood_dark, Vector3(rail_x, 1.3, 0), false)
+			for i3 in 5:
+				_piece_box(body, Vector3(0.6, 0.06, 0.06), wood, Vector3(0, 0.4 + i3 * 0.5, 0), false)
+			var lcs := CollisionShape3D.new()
+			var lbs := BoxShape3D.new()
+			lbs.size = Vector3(0.7, 2.6, 0.14)
+			lcs.shape = lbs
+			lcs.position.y = 1.3
+			body.add_child(lcs)
+		"trapdoor":
+			body.set_meta("open", false)
+			# hinge at one edge; panel swings down
+			_piece_box(body, Vector3(1.4, 0.1, 1.4), wood, Vector3(0, 0, 0.7))
+			var handle := MeshInstance3D.new()
+			var hm2 := SphereMesh.new()
+			hm2.radius = 0.05
+			hm2.height = 0.1
+			handle.mesh = hm2
+			handle.material_override = _flat_mat(Color(0.3, 0.3, 0.32))
+			handle.position = Vector3(0, 0.07, 1.25)
+			body.add_child(handle)
 		"floor":
 			_piece_box(body, Vector3(3, 0.22, 3), wood, Vector3(0, 0.11, 0))
 		"roof":
@@ -1458,7 +1520,7 @@ func sv_toggle_door(sname: String) -> void:
 	if not holder.has_node(sname):
 		return
 	var s := holder.get_node(sname)
-	if s.get_meta("kind") not in ["door", "shutter"]:
+	if s.get_meta("kind") not in ["door", "shutter", "trapdoor"]:
 		return
 	rx_door.rpc(sname, not s.get_meta("open"))
 
@@ -1469,9 +1531,12 @@ func rx_door(sname: String, open: bool) -> void:
 		return
 	var s := holder.get_node(sname)
 	s.set_meta("open", open)
-	var target: float = float(s.get_meta("base_yaw")) + (1.9 if open else 0.0)
 	var tw := s.create_tween()
-	tw.tween_property(s, "rotation:y", target, 0.25).set_trans(Tween.TRANS_SINE)
+	if s.get_meta("kind") == "trapdoor":
+		tw.tween_property(s, "rotation:x", -1.5 if open else 0.0, 0.25).set_trans(Tween.TRANS_SINE)
+	else:
+		var target: float = float(s.get_meta("base_yaw")) + (1.9 if open else 0.0)
+		tw.tween_property(s, "rotation:y", target, 0.25).set_trans(Tween.TRANS_SINE)
 	Sfx.play_at(self, s.global_position, "place", -14.0)
 
 @rpc("any_peer", "call_local", "reliable")

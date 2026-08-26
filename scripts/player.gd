@@ -127,6 +127,8 @@ func _physics_process(delta: float) -> void:
 		if _has_net:
 			global_position = global_position.lerp(net_pos, minf(1.0, delta * 12.0))
 			rotation.y = lerp_angle(rotation.y, net_yaw, minf(1.0, delta * 12.0))
+			if _head_pivot:
+				_head_pivot.rotation.x = lerpf(_head_pivot.rotation.x, clampf(_net_pitch, -0.7, 0.7), minf(1.0, delta * 10.0))
 		_animate_walk(delta)
 		return
 
@@ -147,7 +149,20 @@ func _physics_process(delta: float) -> void:
 	var speed := (SPRINT if Input.is_action_pressed("sprint") and hunger > 5.0 else SPEED) * weight_mult()
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
-	if not is_on_floor():
+	var climbing := false
+	if dir != Vector3.ZERO:
+		# press into a ladder to climb it
+		var lq := PhysicsRayQueryParameters3D.create(
+			global_position + Vector3(0, 1.0, 0),
+			global_position + Vector3(0, 1.0, 0) + dir * 0.9)
+		lq.exclude = [get_rid()]
+		var lh := get_world_3d().direct_space_state.intersect_ray(lq)
+		if not lh.is_empty() and lh["collider"] is Node and lh["collider"].has_meta("struct") \
+				and lh["collider"].get_meta("kind") == "ladder":
+			climbing = true
+	if climbing:
+		velocity.y = 3.4
+	elif not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	elif Input.is_action_pressed("jump"):
 		velocity.y = JUMP
@@ -184,7 +199,7 @@ func _physics_process(delta: float) -> void:
 	_sync_accum += delta
 	if _sync_accum >= 0.05 and multiplayer.multiplayer_peer != null:
 		_sync_accum = 0.0
-		rx_state.rpc(global_position, rotation.y, sailing)
+		rx_state.rpc(global_position, rotation.y, sailing, head.rotation.x)
 
 # ---------------------------------------------------------------- building
 
@@ -201,6 +216,9 @@ const GHOST_SHAPES := {
 	"hatched":    [Vector3(3.4, 1.5, 3.4), Vector3(0, 0.75, 0)],
 	"door":       [Vector3(1.16, 2.15, 0.09), Vector3(0.58, 1.1, 0)],
 	"shutter":    [Vector3(1.16, 1.0, 0.07), Vector3(0.58, 1.5, 0)],
+	"stairs":     [Vector3(3, 2.6, 3), Vector3(0, 1.3, 0)],
+	"ladder":     [Vector3(0.7, 2.6, 0.15), Vector3(0, 1.3, 0)],
+	"trapdoor":   [Vector3(1.4, 0.1, 1.4), Vector3(0, 0, 0.7)],
 }
 
 var build_index := 0
@@ -241,6 +259,11 @@ func _update_ghost() -> void:
 		_ghost.position = GHOST_SHAPES[kind][1]
 		_world().add_child(pivot)
 	var hit := _raycast()
+	if hit.is_empty() and kind == "foundation":
+		# foundations can reach into open air and over water — aim decides
+		var from := cam.global_position
+		var dir := -cam.global_transform.basis.z
+		hit = {"collider": null, "position": from + dir * 8.0, "normal": Vector3.UP}
 	_ghost_valid = not hit.is_empty() and _compute_ghost(kind, hit)
 	if inv.get("wood", 0) < int(GameItems.BUILD_PIECES[kind]["wood"]):
 		_ghost_valid = false
@@ -266,27 +289,43 @@ func _compute_ghost(kind: String, hit: Dictionary) -> bool:
 	var w := _world()
 	_ghost_yaw = 0.0
 	if kind == "foundation":
-		if col is Node and col.has_meta("struct") and col.get_meta("kind") == "foundation":
+		if col is Node and col != null and col.has_meta("struct") and col.get_meta("kind") == "foundation":
 			# extend from an existing foundation toward where you're aiming
 			var base := col as Node3D
 			var d := hpos - base.global_position
 			var off := Vector3(3, 0, 0) * signf(d.x) if absf(d.x) > absf(d.z) else Vector3(0, 0, 3) * signf(d.z)
 			_ghost_pos = base.global_position + off
 			return not _piece_at(_ghost_pos, "foundation")
-		if col is Node and (col.has_meta("struct") or col.has_meta("res") or col.has_meta("animal")):
+		if col is Node and col != null and (col.has_meta("struct") or col.has_meta("res") or col.has_meta("animal")):
 			return false
 		var cx := _snap3(hpos.x)
 		var cz := _snap3(hpos.z)
 		var top := -99.0
-		var lo := 99.0
 		for corner in [Vector2(-1.5, -1.5), Vector2(1.5, -1.5), Vector2(1.5, 1.5), Vector2(-1.5, 1.5)]:
-			var h := w.height_at(cx + corner.x, cz + corner.y)
-			top = maxf(top, h)
-			lo = minf(lo, h)
-		if lo < 0.3 or top - lo > 2.2:
-			return false
-		_ghost_pos = Vector3(cx, top + 0.3, cz)
+			top = maxf(top, w.height_at(cx + corner.x, cz + corner.y))
+		# how high you AIM is how tall it stands — over land or open water
+		var deck_y := clampf(hpos.y + 0.4, maxf(top + 0.35, 0.5), maxf(top, 0.0) + 6.5)
+		# near an existing deck? match its height so floors meet flush
+		for s in w.get_node("Structures").get_children():
+			if s.get_meta("kind") in ["foundation", "floor"] \
+					and Vector2(s.global_position.x - cx, s.global_position.z - cz).length() < 4.6:
+				deck_y = s.global_position.y
+				break
+		_ghost_pos = Vector3(cx, deck_y, cz)
 		return not _piece_at(_ghost_pos, "foundation")
+	if kind == "ladder":
+		if col is Node and col != null and col.has_meta("struct") \
+				and col.get_meta("kind") in ["wall", "doorway", "window", "half_wall", "foundation"]:
+			var n2: Vector3 = hit["normal"]
+			n2.y = 0
+			if n2.length() < 0.3:
+				return false
+			n2 = n2.normalized()
+			var base3 := col as Node3D
+			_ghost_pos = Vector3(hpos.x, base3.global_position.y, hpos.z) + n2 * 0.16
+			_ghost_yaw = atan2(-n2.x, -n2.z)
+			return not _piece_at(_ghost_pos, "ladder")
+		return false
 	if kind == "door" or kind == "shutter":
 		var want := "doorway" if kind == "door" else "window"
 		if col is Node and col.has_meta("struct") and col.get_meta("kind") == want:
@@ -304,7 +343,7 @@ func _compute_ghost(kind: String, hit: Dictionary) -> bool:
 	var cell_z: float
 	var level_y: float
 	if bkind == "foundation" or bkind == "floor":
-		if bkind == "floor" and kind in ["floor", "roof", "slope", "hatched"]:
+		if bkind == "floor" and kind in ["floor", "roof", "slope", "hatched", "stairs", "trapdoor"]:
 			# extend sideways at the same level
 			var d2 := hpos - base2.global_position
 			var off2 := Vector3(3, 0, 0) * signf(d2.x) if absf(d2.x) > absf(d2.z) else Vector3(0, 0, 3) * signf(d2.z)
@@ -322,7 +361,7 @@ func _compute_ghost(kind: String, hit: Dictionary) -> bool:
 		level_y = base2.global_position.y + (1.3 if bkind == "half_wall" else 2.6)
 	else:
 		return false
-	if kind in ["floor", "roof", "slope", "hatched"]:
+	if kind in ["floor", "roof", "slope", "hatched", "stairs", "trapdoor"]:
 		if bkind == "foundation":
 			return false   # the foundation already is your floor
 		_ghost_pos = Vector3(cell_x, level_y, cell_z)
@@ -387,7 +426,7 @@ func _sail(delta: float) -> void:
 	_sync_accum += delta
 	if _sync_accum >= 0.05 and multiplayer.multiplayer_peer != null:
 		_sync_accum = 0.0
-		rx_state.rpc(global_position, rotation.y, sailing)
+		rx_state.rpc(global_position, rotation.y, sailing, head.rotation.x)
 
 func _set_sailing(on: bool) -> void:
 	sailing = on
@@ -676,6 +715,8 @@ func _limb(bw: float, bd: float, tw: float, td: float, len_: float, c: Color, pi
 	return pivot
 
 var _hair: MeshInstance3D = null
+var _head_pivot: Node3D = null
+var _net_pitch := 0.0
 var _skin_color := Color.WHITE
 var _tag: Label3D = null
 var appearance := {}            # chosen in the menu; empty = rolled from peer_id
@@ -725,15 +766,27 @@ func _build_body() -> void:
 	# torso: bare skin until you weave something
 	_shirt = _tbox(0.26, 0.15, 0.32, 0.18, 0.64, _skin_color, Vector3(0, 0.88, 0))
 	_box(Vector3(0.52, 0.26, 0.36), Color(0.42, 0.44, 0.48), Vector3(0, 0.90, 0))   # the shorts
-	# head + face
-	_head_box = _box(Vector3(0.44, 0.44, 0.42), _skin_color, Vector3(0, 1.76, 0))
+	# head + face, on a pivot so it can look where its owner looks
+	_head_pivot = Node3D.new()
+	_head_pivot.position = Vector3(0, 1.55, 0)
+	mesh_holder.add_child(_head_pivot)
+	var hpart := func(size: Vector3, c: Color, pos: Vector3) -> MeshInstance3D:
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = size
+		mi.mesh = bm
+		mi.material_override = _flat(c)
+		mi.position = pos
+		_head_pivot.add_child(mi)
+		return mi
+	_head_box = hpart.call(Vector3(0.44, 0.44, 0.42), _skin_color, Vector3(0, 0.21, 0))
 	var eye_c := Color(0.13, 0.11, 0.09)
-	_box(Vector3(0.075, 0.09, 0.02), eye_c, Vector3(-0.10, 1.80, -0.215))
-	_box(Vector3(0.075, 0.09, 0.02), eye_c, Vector3(0.10, 1.80, -0.215))
-	_box(Vector3(0.14, 0.045, 0.02), eye_c.lightened(0.15), Vector3(0, 1.64, -0.215))
+	hpart.call(Vector3(0.075, 0.09, 0.02), eye_c, Vector3(-0.10, 0.25, -0.215))
+	hpart.call(Vector3(0.075, 0.09, 0.02), eye_c, Vector3(0.10, 0.25, -0.215))
+	hpart.call(Vector3(0.14, 0.045, 0.02), eye_c.lightened(0.15), Vector3(0, 0.09, -0.215))
 	# hair: cap + back panel (length by style), optional beard
 	if hair_style != 2:
-		_hair = _box(Vector3(0.48, 0.14, 0.46), hair_c, Vector3(0, 2.02, 0.01))
+		_hair = hpart.call(Vector3(0.48, 0.14, 0.46), hair_c, Vector3(0, 0.47, 0.01))
 		var hair_back := MeshInstance3D.new()
 		var hbm := BoxMesh.new()
 		hbm.size = Vector3(0.48, 0.30 if hair_style == 0 else 0.72, 0.10)
@@ -742,7 +795,7 @@ func _build_body() -> void:
 		hair_back.position = Vector3(0, -0.18 if hair_style == 0 else -0.39, 0.19)
 		_hair.add_child(hair_back)
 	if has_beard:
-		_box(Vector3(0.32, 0.12, 0.03), hair_c, Vector3(0, 1.57, -0.21))
+		hpart.call(Vector3(0.32, 0.12, 0.03), hair_c, Vector3(0, 0.02, -0.21))
 	# arms: sleeve tapers to the wrist, skin hands
 	_arm_l = _limb(0.075, 0.075, 0.09, 0.09, 0.52, _skin_color, Vector3(-0.41, 1.46, 0))
 	_arm_r = _limb(0.075, 0.075, 0.09, 0.09, 0.52, _skin_color, Vector3(0.41, 1.46, 0))
@@ -823,13 +876,9 @@ func _update_viewmodel() -> void:
 		_viewmodel.queue_free()
 	_viewmodel = Node3D.new()
 	cam.add_child(_viewmodel)
-	_viewmodel.position = Vector3(0.33, -0.4, -0.55)
+	_viewmodel.position = Vector3(0.36, -0.44, -0.52)
 	var wood := Color(0.42, 0.30, 0.17)
 	var head_c: Color = TOOL_MATERIAL_COLORS.get(tool.get_slice("_", 0), Color(0.5, 0.5, 0.5))
-	# the arm runs off the bottom edge of the screen — you never see its end
-	var arm := Node3D.new()
-	arm.rotation_degrees = Vector3(-48, 10, 7)
-	_viewmodel.add_child(arm)
 	var apart := func(parent: Node3D, size: Vector3, c: Color, pos: Vector3) -> void:
 		var mi := MeshInstance3D.new()
 		var bm := BoxMesh.new()
@@ -838,10 +887,22 @@ func _update_viewmodel() -> void:
 		mi.material_override = _flat(c)
 		mi.position = pos
 		parent.add_child(mi)
-	apart.call(arm, Vector3(0.085, 0.085, 0.62), _skin_color, Vector3(0, -0.02, 0.32))   # forearm, into the camera
-	apart.call(arm, Vector3(0.1, 0.09, 0.12), _skin_color, Vector3(0, 0.0, -0.01))       # fist
+	# ONE big Minecraft-style arm: rises out of the bottom-right corner, tip
+	# up toward screen center. Slightly tapered/skewed so it isn't machine-cut.
+	var arm := Node3D.new()
+	arm.rotation_degrees = Vector3(-56, -16, 10)
+	arm.position = Vector3(0.05, -0.08, 0.02)
+	_viewmodel.add_child(arm)
+	var armmesh := MeshInstance3D.new()
+	armmesh.mesh = _tapered_mesh(0.115, 0.12, 0.096, 0.102, 1.0)
+	armmesh.material_override = _flat(_skin_color)
+	armmesh.rotation_degrees = Vector3(-90, 0, 4)
+	armmesh.position = Vector3(0, 0, 0.48)
+	arm.add_child(armmesh)
+	apart.call(arm, Vector3(0.14, 0.125, 0.14), _skin_color, Vector3(0, 0.015, -0.53))   # fist cap
 	var mount := Node3D.new()
-	mount.position = Vector3(0, 0.0, -0.01)
+	mount.position = Vector3(0, 0.06, -0.52)
+	mount.rotation_degrees = Vector3(56, 16, -10)   # tools stand upright on screen
 	arm.add_child(mount)
 	if tool == "torch":
 		apart.call(mount, Vector3(0.045, 0.5, 0.045), wood, Vector3(0, 0.16, 0))
@@ -1105,9 +1166,15 @@ func _refresh_gear_visuals() -> void:
 		lm.albedo_color = legs_c
 	for boot in _boots:
 		boot.visible = equipment.has("legs")
-	if equipment.has("head") and _hat_mesh == null:
+	if equipment.has("head") and _hat_mesh == null and _head_pivot != null:
 		# brimmed cap: crown + wider brim, replaces hair
-		_hat_mesh = _box(Vector3(0.40, 0.20, 0.40), Color.WHITE, Vector3(0, 2.08, 0))
+		_hat_mesh = MeshInstance3D.new()
+		var hat_bm := BoxMesh.new()
+		hat_bm.size = Vector3(0.40, 0.20, 0.40)
+		_hat_mesh.mesh = hat_bm
+		_hat_mesh.material_override = _flat(Color.WHITE)
+		_hat_mesh.position = Vector3(0, 0.53, 0)
+		_head_pivot.add_child(_hat_mesh)
 		var brim := MeshInstance3D.new()
 		var bm := BoxMesh.new()
 		bm.size = Vector3(0.62, 0.05, 0.62)
@@ -1462,7 +1529,7 @@ func _interact() -> void:
 					hud.flash("The furnace roars. 4 wood in, 2 charcoal out.")
 			elif hud:
 				hud.flash("The furnace wants 4 wood at a time.")
-		elif kind in ["door", "shutter"]:
+		elif kind in ["door", "shutter", "trapdoor"]:
 			_world().sv_toggle_door.rpc_id(1, String(col.name))
 		elif in_build_mode() and kind in GameItems.BUILD_PIECES:
 			if inv.get("wood", 0) >= 1:
@@ -1597,9 +1664,10 @@ func load_local() -> void:
 # ---------------------------------------------------------------- rpcs
 
 @rpc("authority", "call_remote", "unreliable")
-func rx_state(pos: Vector3, yaw: float, sail := false) -> void:
+func rx_state(pos: Vector3, yaw: float, sail := false, pitch := 0.0) -> void:
 	net_pos = pos
 	net_yaw = yaw
+	_net_pitch = pitch
 	_has_net = true
 	if not is_local() and sail != sailing:
 		_set_sailing(sail)

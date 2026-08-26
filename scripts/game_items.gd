@@ -71,6 +71,9 @@ const BUILD_PIECES := {
 	"hatched":    {"wood": 7},
 	"door":       {"wood": 4},
 	"shutter":    {"wood": 2},
+	"stairs":     {"wood": 5},
+	"ladder":     {"wood": 3},
+	"trapdoor":   {"wood": 4},
 }
 const BCELL := 3.0
 const BWALL_H := 2.6
@@ -219,7 +222,8 @@ const NICE_NAMES := {
 	"foundation": "Foundation", "floor": "Floor",
 	"half_wall": "Half Wall", "doorway": "Doorway", "window": "Window Wall",
 	"gable": "Gable", "roof": "Roof", "slope": "Sloped Roof",
-	"hatched": "Hatched Roof",
+	"hatched": "Hatched Roof", "stairs": "Stairs", "ladder": "Ladder",
+	"trapdoor": "Trapdoor",
 	"door": "Door", "shutter": "Shutters",
 	"iron_axe": "Iron Axe", "iron_pick": "Iron Pick", "iron_spear": "Iron Spear",
 	"fiber_cap": "Fiber Cap", "fiber_tunic": "Fiber Tunic",

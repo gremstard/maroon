@@ -301,10 +301,19 @@ Maroon 1.0 is out and earning lessons.
   **ladders** and **trapdoors**. **Stairs** for multi-floor interiors.
 - **Locks & keys**: crafted **as a pair, permanently bound** — one recipe
   yields both. Lose the key and it's gone forever… unless you hold the other
-  half: a key can craft a **duplicate lock**, a lock can craft a **duplicate
-  key**. Locks mount on doors and storage. **Brute force is always possible**:
-  locks (like every placeable) have HP — breaking one takes real time and
-  makes serious noise, and progress persists between attempts.
+  half: a key can craft a **duplicate lock** (one key, every door), a lock can
+  craft a **duplicate key** — and the **owner can salvage a placed lock** to
+  craft its key back. Locks mount on doors and storage. **Brute force is
+  always possible**: locks (like every placeable) have HP — breaking one takes
+  real time and makes serious noise, and progress persists between attempts.
+- **Groups**: a formal group **shares ownership** — placed items, salvage
+  rights, locks/keys in effect, and the totem's claim. The Maroon group is the
+  household; in M2 groups also gate friendly fire off.
+- *(M2)* **Keypad lock**: 4-digit code, memory-based — anyone who knows it
+  gets in, nothing to carry or lose, and it's **harder to break** than a key
+  lock. Knowledge as the key; social engineering as the lockpick.
+- **Online animation debt** *(noted)*: swing + held item already sync; add
+  head-pitch facing (done 0.17), then walk/act variety as polish continues.
 
 ## Playtest queue (from mrrzone's first sessions)
 Big systems, in build order, each its own pass:
@@ -354,6 +363,18 @@ Big systems, in build order, each its own pass:
   group chat** — groups being small formal bands, which is also what disables
   accidental friendly fire inside them.
 - No wipes — worlds are meant to be kept.
+
+## v0.17 status (this repo)
+Added in 0.17 — **Building v2** + presence polish: **pillar foundations**
+(deck on four logs sunk to whatever ground each corner finds — aim height
+sets deck height, nearby decks snap flush; **stilt houses over water** work);
+**stairs** (walkable steps to the next storey), **ladders** (mount on any
+wall, press into them to climb), **trapdoors** (floor hatch, E swings it
+down). Viewmodel rebuilt to mrrzone's drawings: one big Minecraft-style arm
+rising from the corner, tip up toward center, slightly tapered/skewed so
+it's not machine-cut; tools stand upright from the fist. **Heads now face
+where their owner looks** (pitch synced). DESIGN: lock salvage/duplication
+rules, **groups** (shared ownership + claim), M2 keypad lock.
 
 ## v0.16 status (this repo)
 Added in 0.16 — **weather** + forest density: server-driven sky cycling
