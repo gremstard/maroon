@@ -320,7 +320,18 @@ Big systems, in build order, each its own pass:
   beatable, then peaceful. No raiding of claims. No chat/comms of any kind.
 - No wipes — worlds are meant to be kept.
 
-## v0.10 status (this repo)
+## v0.11 status (this repo)
+Added in v0.11 — **the grid inventory**: 4 hotbar **binding** slots (keys 1–4;
+crafts auto-bind; upgrades replace their lesser tool in place) + a Tarkov-style
+pack grid (4 × 2 cells, +1 row woven pack, +2 hide pack; stacks with per-item
+sizes and stack caps; branches are 1×2). Tab opens the pack + crafting screen:
+click-to-move stacks, bind items to hotbar, DROP to discard, overflow shown in
+red. Pickups now refuse when the pack is full. **Held torches light the area**
+(first slice of the lighting overhaul) and count as light for dwellers —
+first-person flame viewmodel + visible in others' hands. Hotbar honesty kept:
+counts shown, missing items dimmed. Layout + bindings persist per seed.
+
+## v0.10 status
 Added in v0.10 — **the building system**: craft a **Hammer**, select the build
 slot (7), and build straight from raw wood. 12 pieces on a 3 m grid —
 foundation (snaps to terrain, extends edge-to-edge), wall, half wall, doorway,

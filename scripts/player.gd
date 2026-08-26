@@ -8,7 +8,9 @@ const JUMP := 7.0
 const GRAVITY := 18.0
 const REACH := 3.2
 
-const SLOTS := ["hand", "axe", "pick", "spear", "food", "campfire", "build", "totem", "beacon", "torch"]
+const HOTBAR_SLOTS := 4         # four bindings: tools, placeables, food, torch
+const GRID_COLS := 4            # Tarkov-style pack: 4 wide, rows grow with packs
+const GRID_BASE_ROWS := 2
 const CARRY_BASE := 60          # items carried before weight slows you
 
 var peer_id := 1
@@ -17,6 +19,8 @@ var hunger := 100.0
 var inv := {"wood": 0, "stone": 0}
 var owned_tools := {}           # e.g. {"stone_axe": true}
 var equipment := {}             # gear slot -> item, e.g. {"torso": "hide_coat"}
+var hotbar_items: Array = ["", "", "", ""]   # bindings by item name; "" = bare hands
+var grid_stacks: Array = []     # {item, count, x, y, w, h}; x == -1 means overflow
 var selected_slot := 0
 var swing_cooldown := 0.0
 
@@ -162,7 +166,7 @@ func _physics_process(delta: float) -> void:
 
 	# actions
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		for i in SLOTS.size():
+		for i in HOTBAR_SLOTS:
 			if Input.is_action_just_pressed("slot_%d" % (i + 1)):
 				selected_slot = i
 		if Input.is_action_just_pressed("attack"):
@@ -207,7 +211,7 @@ func build_piece_name() -> String:
 	return GameItems.BUILD_PIECES.keys()[build_index]
 
 func in_build_mode() -> bool:
-	return SLOTS[selected_slot] == "build" and owned_tools.has("hammer")
+	return held_item() == "hammer" and owned_tools.has("hammer")
 
 func _update_ghost() -> void:
 	if _ghost and not in_build_mode():
@@ -401,7 +405,21 @@ func _update_raft_visual() -> void:
 			_raft_visual.add_child(mi)
 	_raft_visual.visible = sailing
 
+var _torch_light: OmniLight3D = null
+
 func _survival_tick(delta: float) -> void:
+	reconcile_grid()
+	# a held torch pushes back the night (and the dwellers)
+	var torch_out: bool = held_item() == "torch" and inv.get("torch", 0) > 0
+	if torch_out and _torch_light == null:
+		_torch_light = OmniLight3D.new()
+		_torch_light.light_color = Color(1.0, 0.7, 0.3)
+		_torch_light.omni_range = 8.0
+		_torch_light.light_energy = 1.4
+		_torch_light.position.y = 1.6
+		add_child(_torch_light)
+	if _torch_light:
+		_torch_light.visible = torch_out
 	_psave_accum += delta
 	if _psave_accum >= 60.0:
 		_psave_accum = 0.0
@@ -453,20 +471,118 @@ func _world() -> World:
 	return n as World
 
 func current_tool() -> String:
-	return current_tool_for(SLOTS[selected_slot])
+	var held := held_item()
+	return held if GameItems.TOOL_STATS.has(held) else "hand"
 
-func current_tool_for(slot: String) -> String:
-	match slot:
-		"axe":
-			for t in ["iron_axe", "stone_axe", "crude_axe"]:
-				if owned_tools.has(t): return t
-		"pick":
-			for t in ["iron_pick", "stone_pick", "crude_pick"]:
-				if owned_tools.has(t): return t
-		"spear":
-			for t in ["iron_spear", "spear"]:
-				if owned_tools.has(t): return t
-	return "hand"
+func held_item() -> String:
+	return hotbar_items[selected_slot]
+
+func set_hotbar(slot: int, item: String) -> void:
+	hotbar_items[slot] = item
+
+func _auto_hotbar(item: String) -> void:
+	# A fresh craft jumps into your hands if there's room for it.
+	var bindable := GameItems.TOOL_STATS.has(item) or item == "hammer" \
+		or item in GameItems.PLACEABLES or item in GameItems.FOODS
+	if not bindable or item in hotbar_items:
+		# upgraded tool replaces its lesser cousin in place
+		for cat in ["axe", "pick", "spear"]:
+			if item == best_tool(cat):
+				for i in HOTBAR_SLOTS:
+					if hotbar_items[i] != item and hotbar_items[i].ends_with(cat):
+						hotbar_items[i] = item
+		return
+	for i in HOTBAR_SLOTS:
+		if hotbar_items[i] == "":
+			hotbar_items[i] = item
+			return
+
+func best_tool(category: String) -> String:
+	var ladder: Array = {
+		"axe": ["iron_axe", "stone_axe", "crude_axe"],
+		"pick": ["iron_pick", "stone_pick", "crude_pick"],
+		"spear": ["iron_spear", "spear"],
+	}.get(category, [])
+	for t in ladder:
+		if owned_tools.has(t):
+			return t
+	return ""
+
+# ---------------------------------------------------------------- grid pack
+
+func grid_rows() -> int:
+	var rows := GRID_BASE_ROWS
+	if equipment.get("back", "") == "woven_pack":
+		rows += 1
+	elif equipment.get("back", "") == "hide_pack":
+		rows += 2
+	return rows
+
+func _cell_free(x: int, y: int, w: int, h: int, ignore: int = -1) -> bool:
+	if x < 0 or y < 0 or x + w > GRID_COLS or y + h > grid_rows():
+		return false
+	for i in grid_stacks.size():
+		if i == ignore:
+			continue
+		var s: Dictionary = grid_stacks[i]
+		if s["x"] < 0:
+			continue
+		if x < s["x"] + s["w"] and x + w > s["x"] and y < s["y"] + s["h"] and y + h > s["y"]:
+			return false
+	return true
+
+func _find_spot(item: String) -> Array:
+	# Returns [x, y, w, h] or [] if the pack is full. Tries both rotations.
+	var size := GameItems.grid_size(item)
+	for y in grid_rows():
+		for x in GRID_COLS:
+			if _cell_free(x, y, size.x, size.y):
+				return [x, y, size.x, size.y]
+			if size.x != size.y and _cell_free(x, y, size.y, size.x):
+				return [x, y, size.y, size.x]
+	return []
+
+func can_fit(item: String) -> bool:
+	for s in grid_stacks:
+		if s["item"] == item and s["count"] < GameItems.stack_max(item):
+			return true
+	return not _find_spot(item).is_empty()
+
+func reconcile_grid() -> void:
+	# The counts in `inv` are the truth; the grid is how you carry them.
+	for s in grid_stacks:
+		s["_want"] = 0
+	for item in inv:
+		var remaining: int = inv[item]
+		for s in grid_stacks:
+			if s["item"] != item or remaining <= 0:
+				continue
+			var take: int = mini(remaining, GameItems.stack_max(item))
+			s["_want"] = take
+			remaining -= take
+		while remaining > 0:
+			var take2: int = mini(remaining, GameItems.stack_max(item))
+			var spot := _find_spot(item)
+			if spot.is_empty():
+				grid_stacks.append({"item": item, "count": take2, "_want": take2, "x": -1, "y": -1, "w": 1, "h": 1})
+			else:
+				grid_stacks.append({"item": item, "count": take2, "_want": take2, "x": spot[0], "y": spot[1], "w": spot[2], "h": spot[3]})
+			remaining -= take2
+	for i in range(grid_stacks.size() - 1, -1, -1):
+		var s2: Dictionary = grid_stacks[i]
+		s2["count"] = s2.get("_want", 0)
+		s2.erase("_want")
+		if s2["count"] <= 0:
+			grid_stacks.remove_at(i)
+	# overflow stacks keep trying to come home
+	for s3 in grid_stacks:
+		if s3["x"] < 0:
+			var spot2 := _find_spot(s3["item"])
+			if not spot2.is_empty():
+				s3["x"] = spot2[0]
+				s3["y"] = spot2[1]
+				s3["w"] = spot2[2]
+				s3["h"] = spot2[3]
 
 # ---------------------------------------------------------------- box-rig body
 
@@ -671,11 +787,12 @@ func _update_viewmodel() -> void:
 	# First-person held tool, bottom right — built from boxes like everything.
 	if cam == null:
 		return
-	var tool := current_tool()
-	var key := "%s/%s" % [SLOTS[selected_slot], tool]
+	var tool := held_item()
+	var key := tool
 	if key == _vm_key:
 		return
 	_vm_key = key
+	held_net = tool
 	if multiplayer.multiplayer_peer != null:
 		rx_tool.rpc(tool)   # others see what you're holding
 	if _viewmodel:
@@ -687,7 +804,27 @@ func _update_viewmodel() -> void:
 	var wood := Color(0.42, 0.30, 0.17)
 	var head_c: Color = TOOL_MATERIAL_COLORS.get(tool.get_slice("_", 0), Color(0.5, 0.5, 0.5))
 	_vm_box(_viewmodel, Vector3(0.06, 0.06, 0.22), _skin_color, Vector3(0, -0.03, 0.05), -20)   # forearm/hand
-	if tool == "hand":
+	if tool == "torch":
+		_vm_box(_viewmodel, Vector3(0.05, 0.05, 0.4), wood, Vector3(0, 0.06, -0.1), -50)
+		var flame := MeshInstance3D.new()
+		var fm := SphereMesh.new()
+		fm.radius = 0.07
+		fm.height = 0.15
+		flame.mesh = fm
+		var fmat := StandardMaterial3D.new()
+		fmat.albedo_color = Color(1.0, 0.75, 0.2)
+		fmat.emission_enabled = true
+		fmat.emission = Color(1.0, 0.65, 0.15)
+		fmat.emission_energy_multiplier = 3.0
+		flame.material_override = fmat
+		flame.position = Vector3(0, 0.32, -0.26)
+		_viewmodel.add_child(flame)
+		return
+	if tool == "hammer":
+		_vm_box(_viewmodel, Vector3(0.045, 0.045, 0.34), wood, Vector3(0, 0.03, -0.1), -35)
+		_vm_box(_viewmodel, Vector3(0.1, 0.1, 0.14), Color(0.45, 0.45, 0.48), Vector3(0, 0.16, -0.26), -35)
+		return
+	if not GameItems.TOOL_STATS.has(tool):
 		return
 	# all tool parts share one tilted root so they stay attached
 	var tool_root := Node3D.new()
@@ -735,11 +872,14 @@ func _swing_feel(hit_sound: String, hit_pos: Variant) -> void:
 
 var _held: Node3D = null
 
+var held_net := ""   # what this survivor is holding, as others know it
+
 @rpc("any_peer", "call_remote", "reliable")
 func rx_tool(tool: String) -> void:
 	# Third-person held tool, gripped in the right hand.
 	if multiplayer.get_remote_sender_id() != peer_id or _arm_r == null:
 		return
+	held_net = tool
 	if _held:
 		_held.queue_free()
 		_held = null
@@ -768,6 +908,29 @@ func rx_tool(tool: String) -> void:
 	elif tool.ends_with("spear"):
 		part.call(Vector3(0.045, 0.95, 0.045), wood, Vector3(0, 0.3, 0))
 		part.call(Vector3(0.055, 0.16, 0.055), head_c, Vector3(0, 0.82, 0))
+	elif tool == "torch":
+		part.call(Vector3(0.05, 0.5, 0.05), wood, Vector3(0, 0.15, 0))
+		var tf := MeshInstance3D.new()
+		var tfm2 := SphereMesh.new()
+		tfm2.radius = 0.08
+		tfm2.height = 0.18
+		tf.mesh = tfm2
+		var tmat := StandardMaterial3D.new()
+		tmat.albedo_color = Color(1.0, 0.75, 0.2)
+		tmat.emission_enabled = true
+		tmat.emission = Color(1.0, 0.65, 0.15)
+		tmat.emission_energy_multiplier = 3.0
+		tf.material_override = tmat
+		tf.position = Vector3(0, 0.44, 0)
+		_held.add_child(tf)
+		var tl := OmniLight3D.new()
+		tl.light_color = Color(1.0, 0.7, 0.3)
+		tl.omni_range = 7.0
+		tl.position = Vector3(0, 0.44, 0)
+		_held.add_child(tl)
+	elif tool == "hammer":
+		part.call(Vector3(0.05, 0.4, 0.05), wood, Vector3(0, 0.12, 0))
+		part.call(Vector3(0.11, 0.12, 0.15), Color(0.45, 0.45, 0.48), Vector3(0, 0.34, 0))
 
 @rpc("any_peer", "call_remote", "unreliable")
 func rx_swing_fx() -> void:
@@ -881,17 +1044,17 @@ func _raycast() -> Dictionary:
 	return space.intersect_ray(q)
 
 func _use_selected() -> void:
-	var slot: String = SLOTS[selected_slot]
-	if slot == "food":
-		_eat()
-		return
-	if slot == "build":
+	var held := held_item()
+	if held == "hammer":
 		_try_place_piece()
 		return
-	if slot in GameItems.PLACEABLES:
-		_place(slot)
+	if held in GameItems.FOODS:
+		_eat(held)
 		return
-	_swing()
+	if held in GameItems.PLACEABLES:
+		_place(held)
+		return
+	_swing()   # tools and bare hands
 
 func _swing() -> void:
 	if swing_cooldown > 0.0:
@@ -953,11 +1116,16 @@ func _gather(col: Node) -> String:
 			if hud:
 				hud.flash("The ore shrugs off your crude pick. Craft a Stone Pick.")
 			return ""
+	if not can_fit(rstats["item"]):
+		if hud:
+			hud.flash("Your pack is full. Drop something, spend something, or get a bigger pack.")
+		return ""
 	w.sv_hit_resource.rpc_id(1, String(col.name), power)
 	return snd
 
-func _eat() -> void:
-	for food in ["cooked_meat", "berries", "raw_meat"]:
+func _eat(preferred := "") -> void:
+	var order := [preferred] if preferred != "" else ["cooked_meat", "berries", "raw_meat"]
+	for food in order:
 		if inv.get(food, 0) > 0:
 			inv[food] -= 1
 			var f: Dictionary = GameItems.FOODS[food]
@@ -1090,6 +1258,7 @@ func craft(recipe: String) -> void:
 		inv[mat] -= cost[mat]
 	crafted[recipe] = true
 	Sfx.play(self, "craft", -8.0)
+	_auto_hotbar(recipe)
 	if recipe in GameItems.CLOTHES:
 		_try_equip(recipe)
 	elif recipe in GameItems.MATERIALS:
@@ -1120,6 +1289,7 @@ func save_local() -> void:
 		"inv": inv, "tools": owned_tools.keys(), "crafted": crafted.keys(),
 		"gathered": total_gathered, "events": events,
 		"hp": hp, "hunger": hunger, "equipment": equipment,
+		"hotbar": hotbar_items, "grid": grid_stacks,
 	}
 	var f := FileAccess.open(_psave_file(), FileAccess.WRITE)
 	f.store_string(JSON.stringify(data))
@@ -1147,6 +1317,19 @@ func load_local() -> void:
 	hunger = float(data.get("hunger", 100.0))
 	for gear_slot in data.get("equipment", {}):
 		equipment[gear_slot] = data["equipment"][gear_slot]
+	var hb: Array = data.get("hotbar", [])
+	for i in mini(hb.size(), HOTBAR_SLOTS):
+		hotbar_items[i] = String(hb[i])
+	for g in data.get("grid", []):
+		grid_stacks.append({"item": String(g["item"]), "count": int(g["count"]),
+			"x": int(g["x"]), "y": int(g["y"]), "w": int(g["w"]), "h": int(g["h"])})
+	if hotbar_items == ["", "", "", ""]:
+		# older save or fresh hands: bind the best of what you own
+		for cat in ["axe", "pick", "spear"]:
+			_auto_hotbar(best_tool(cat))
+		if owned_tools.has("hammer"):
+			_auto_hotbar("hammer")
+	reconcile_grid()
 	if not equipment.is_empty():
 		rx_equip.rpc(equipment)
 	if hud:

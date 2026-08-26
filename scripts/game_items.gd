@@ -150,6 +150,45 @@ const FOODS := {
 	"cooked_meat": {"hunger": 40.0, "hp": 10.0},
 }
 
+# ---------------------------------------------------------------- grid inventory
+
+const STACK_MAX := {
+	"wood": 50, "stone": 50, "fiber": 30, "branch": 20, "string": 30,
+	"berries": 20, "raw_meat": 10, "cooked_meat": 10, "hide": 20,
+	"iron_ore": 20, "iron_bar": 20, "leviathan_scale": 10, "moonstone": 5,
+	"torch": 10, "campfire": 3, "wall": 5, "totem": 2, "forge": 2, "beacon": 2,
+}
+
+static func stack_max(item: String) -> int:
+	return STACK_MAX.get(item, 1)
+
+static func grid_size(item: String) -> Vector2i:
+	if item in CLOTHES:
+		return Vector2i(2, 2)
+	if item == "branch":
+		return Vector2i(1, 2)
+	return Vector2i(1, 1)
+
+const CATEGORY_COLORS := {
+	"wood": Color(0.45, 0.32, 0.18), "branch": Color(0.42, 0.30, 0.17),
+	"stone": Color(0.45, 0.45, 0.48), "iron_ore": Color(0.40, 0.34, 0.30),
+	"iron_bar": Color(0.62, 0.65, 0.70), "moonstone": Color(0.45, 0.55, 0.75),
+	"fiber": Color(0.62, 0.58, 0.30), "string": Color(0.70, 0.66, 0.50),
+	"hide": Color(0.48, 0.34, 0.22), "leviathan_scale": Color(0.75, 0.62, 0.35),
+	"berries": Color(0.60, 0.25, 0.30), "raw_meat": Color(0.62, 0.30, 0.28),
+	"cooked_meat": Color(0.50, 0.32, 0.20),
+	"torch": Color(0.70, 0.50, 0.25), "campfire": Color(0.60, 0.42, 0.22),
+	"totem": Color(0.55, 0.40, 0.45), "forge": Color(0.40, 0.40, 0.42),
+	"beacon": Color(0.65, 0.55, 0.30),
+	"journal": Color(0.50, 0.42, 0.55), "rusted_key": Color(0.48, 0.36, 0.28),
+	"ancient_lens": Color(0.42, 0.55, 0.60),
+}
+
+static func icon_color(item: String) -> Color:
+	if item in CLOTHES:
+		return TIER_COLORS[CLOTHES[item]["tier"]]
+	return CATEGORY_COLORS.get(item, Color(0.4, 0.4, 0.45))
+
 static func nice(n: String) -> String:
 	return NICE_NAMES.get(n, n.capitalize())
 

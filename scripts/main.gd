@@ -66,7 +66,8 @@ func _ready() -> void:
 		print("[maroon] player at ", pl.global_position, " floor=", pl.is_on_floor(), " terrain_h=", world.height_at(pl.global_position.x, pl.global_position.z))
 		pl.head.rotation.x = -0.1
 		pl.owned_tools["crude_axe"] = true
-		pl.selected_slot = 1   # show the axe viewmodel
+		pl.set_hotbar(0, "crude_axe")
+		pl.selected_slot = 0   # show the axe viewmodel
 		if "--shot-crew" in args:
 			# shoo wildlife out of frame, then stage two geared survivors
 			for a in world.get_node("Animals").get_children():
@@ -130,9 +131,26 @@ func _ready() -> void:
 				if s.get_meta("kind") == "doorway":
 					world.sv_place_structure("door", s.global_position + s.global_transform.basis.x * -0.6, 0.0)
 			pl.owned_tools["hammer"] = true
+			pl.set_hotbar(1, "hammer")
 			pl.inv["wood"] = 40
-			pl.selected_slot = 6   # build mode, ghost visible
+			pl.selected_slot = 1   # build mode, ghost visible
 			await get_tree().create_timer(0.5).timeout
+		if "--shot-pack" in args:
+			pl.inv["wood"] = 34
+			pl.inv["stone"] = 12
+			pl.inv["fiber"] = 7
+			pl.inv["branch"] = 3
+			pl.inv["berries"] = 6
+			pl.inv["torch"] = 4
+			pl.inv["cooked_meat"] = 3
+			pl.owned_tools["hammer"] = true
+			pl.owned_tools["stone_pick"] = true
+			pl.set_hotbar(1, "hammer")
+			pl.set_hotbar(2, "torch")
+			pl.set_hotbar(3, "cooked_meat")
+			pl.reconcile_grid()
+			pl.hud.toggle_craft()
+			await get_tree().create_timer(0.6).timeout
 		if "--shot-lev" in args:
 			world._summon_leviathan()
 			await get_tree().create_timer(4.0).timeout
@@ -798,6 +816,12 @@ func _run_smoke_test() -> void:
 		p.events.get("monolith_awakened", 0), p.inv.get("iron_bar", 0)])
 	ok = ok and world.get_node("Monolith").get_meta("awakened") and p.events.get("monolith_awakened", 0) == 1
 
+	# grid inventory: reconcile builds stacks, crafts auto-bind to hotbar
+	p.reconcile_grid()
+	print("[smoke] grid: %d stacks, axe bound=%s, rows=%d" % [p.grid_stacks.size(), "crude_axe" in p.hotbar_items, p.grid_rows()])
+	ok = ok and p.grid_stacks.size() > 0 and "crude_axe" in p.hotbar_items
+	ok = ok and p.held_item() == p.hotbar_items[p.selected_slot]
+
 	# identity: profile roundtrip + appearance applied to the rig
 	var orig_profile := ""
 	if FileAccess.file_exists(Profile.PATH):
@@ -880,7 +904,6 @@ func _run_smoke_test() -> void:
 	p.inv["raw_meat"] = p.inv.get("raw_meat", 0) + 1
 	p.events["cooked"] = 1
 	p.hunger = 20.0
-	p.selected_slot = 4
 	p._eat()
 	print("[smoke] hunger after eating: ", p.hunger)
 	ok = ok and p.hunger > 20.0

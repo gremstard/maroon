@@ -1314,10 +1314,14 @@ func _build_cave() -> void:
 		res.rotation.y = rng.randf() * TAU
 
 func light_near(pos: Vector3, radius: float) -> bool:
-	# Is there a burning structure close enough to hold the dark back?
+	# Is there a burning structure — or a survivor gripping a torch —
+	# close enough to hold the dark back?
 	for s in get_node("Structures").get_children():
 		if s.get_meta("kind") in ["torch", "campfire", "beacon"] \
 				and s.global_position.distance_to(pos) < radius:
+			return true
+	for p in get_node("Players").get_children():
+		if p.held_net == "torch" and p.global_position.distance_to(pos) < radius:
 			return true
 	return false
 
