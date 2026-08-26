@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAROON — you, your friends, and the wilderness</title>
+<meta name="description" content="Maroon: the co-op survival island where you cannot hurt each other — and the game can be beaten. Free for Windows and macOS, by Brain Dump Inneractive.">
+<link rel="icon" href="img/emblem.png">
+<style>
+  :root {
+    --bg: #12141c; --panel: #1a1d28; --ink: #e8e6e0; --dim: #9a97a0;
+    --maroon: #7a2634; --ember: #cc6136; --gold: #e5b054;
+  }
+  * { margin: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font: 16px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .hero { text-align: center; padding: 72px 24px 48px;
+    background: linear-gradient(180deg, #17111e 0%, #3a1420 55%, #12141c 100%); }
+  .hero img.emblem { width: 200px; border-radius: 12px; box-shadow: 0 12px 48px rgba(0,0,0,.6); }
+  h1 { font-size: 56px; letter-spacing: .35em; margin: 28px 0 6px; padding-left: .35em; }
+  .tag { color: var(--dim); font-size: 19px; }
+  .pitch { max-width: 620px; margin: 22px auto 0; font-size: 18px; color: #cfccc6; }
+  .pitch b { color: var(--gold); }
+  .btns { margin-top: 36px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 14px 28px; border-radius: 8px; text-decoration: none;
+    font-weight: 600; font-size: 17px; transition: transform .1s ease; }
+  .btn:hover { transform: translateY(-2px); }
+  .btn.primary { background: var(--maroon); color: #fff; }
+  .btn.secondary { background: var(--panel); color: var(--ink); border: 1px solid #333644; }
+  .note { color: var(--dim); font-size: 13px; margin-top: 14px; }
+  section { max-width: 980px; margin: 0 auto; padding: 56px 24px; }
+  h2 { font-size: 26px; margin-bottom: 18px; color: var(--gold); letter-spacing: .04em; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+  .card { background: var(--panel); border-radius: 10px; padding: 20px 22px; }
+  .card h3 { font-size: 17px; margin-bottom: 8px; color: var(--ink); }
+  .card p { color: var(--dim); font-size: 14.5px; }
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .shots img { width: 100%; border-radius: 8px; display: block; }
+  .rule { max-width: 700px; margin: 0 auto; text-align: center; font-size: 22px; padding: 48px 24px; color: #cfccc6; }
+  .rule b { color: var(--ember); }
+  footer { text-align: center; padding: 40px 24px 56px; color: var(--dim); font-size: 14px;
+    border-top: 1px solid #23263200; }
+  footer a { color: var(--gold); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <img class="emblem" src="img/emblem.png" alt="Maroon emblem — an island at dusk, a beacon burning">
+  <h1>MAROON</h1>
+  <div class="tag">you, your friends, and the wilderness</div>
+  <p class="pitch">A co-op survival island for 2–8 friends where <b>you cannot hurt each other</b> —
+    the game won't let you — and where, unlike every survival game you've played,
+    <b>the game can be beaten.</b></p>
+  <div class="btns">
+    <a class="btn primary" href="https://github.com/gremstard/maroon/releases/latest/download/Maroon-Windows.exe">Download for Windows</a>
+    <a class="btn primary" href="https://github.com/gremstard/maroon/releases/latest/download/Maroon-macOS.zip">Download for macOS</a>
+    <a class="btn secondary" href="https://github.com/gremstard/maroon">Source on GitHub</a>
+  </div>
+  <p class="note">Free. Unsigned early builds — Windows: “More info → Run anyway”. macOS: right-click → Open the first time.</p>
+</div>
+
+<section>
+  <h2>THE ISLAND</h2>
+  <div class="shots">
+    <img src="img/maroon_build.png" alt="A hand-built cabin with a thatched roof">
+    <img src="img/maroon_raft.png" alt="Sailing a raft toward the Far Isle">
+    <img src="img/maroon_cave.png" alt="The Sea Cave, torchlight holding back the dark">
+    <img src="img/maroon_crew2.png" alt="Three survivors in fiber, hide and scale gear">
+  </div>
+</section>
+
+<section>
+  <h2>WHAT'S IN IT</h2>
+  <div class="grid">
+    <div class="card"><h3>Forage like you mean it</h3><p>No punching trees. Branches from deadfall, fiber from dry grass, string twisted by hand — then your first crude axe, and the island opens up.</p></div>
+    <div class="card"><h3>Quest chains, not checklists</h3><p>The shipwreck's journal leads to wolf-carried keys, ruins, a signal beacon at the peak — and something answering from beyond the reef.</p></div>
+    <div class="card"><h3>Build a real home</h3><p>Snap-together foundations, walls, doorways, windows, thatched roofs. Doors that swing. A claim totem that keeps the rot away — feed it.</p></div>
+    <div class="card"><h3>Creatures with one rule each</h3><p>Stand still and the bear loses interest. Never meet a boar's eyes. Torchlight is the only thing a cave dweller fears. Learn the rule or wear the scar.</p></div>
+    <div class="card"><h3>Gear you can read at a glance</h3><p>Fiber → hide → iron → leviathan scale. What your friends wear is what they've survived. No chat. Your look is your name.</p></div>
+    <div class="card"><h3>Two islands, one sea</h3><p>Raft past the reef to the Far Isle — richer veins, hungrier things, and a monolith that wants three moonstones.</p></div>
+  </div>
+</section>
+
+<div class="rule">You cannot hurt other survivors.<br><b>The game won't let you. That's the point.</b></div>
+
+<footer>
+  a <a href="https://braindumpia.web.app">Brain Dump Inneractive</a> game · by mrrzone<br>
+  Windows &amp; macOS · free · <a href="https://github.com/gremstard/maroon/releases">all releases</a>
+</footer>
+
+</body>
+</html>

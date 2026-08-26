@@ -1,5 +1,5 @@
 # MAROON
-*by — **Brain Dump Inneractive** (BDIA)*
+*by **mrrzone** — [Brain Dump Inneractive](https://braindumpia.web.app) (BDIA)*
 
 You're marooned. It's you, your friends, and the wilderness — never each other.
 A PnPvE survival game (Unturned × Rust × Minecraft, minus the toxicity).

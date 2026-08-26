@@ -241,14 +241,64 @@ crows and wolves; build in the highlands, bears come. Location = loadout.
   the tech ladder past SCAVOCK's no-guns rule: firearms, rocket launchers,
   helicopters, Rust-style. SCAVOCK's TTK logic gets re-derived for guns.
 
-## Playtest queue (from Riz's first sessions)
+## Road to 1.0
+What "fully fledged" means for Maroon, beyond bug fixing. Ordered — each line
+is roughly one release. The Long Game arc is the 1.0 centerpiece: 1.0 ships
+when a group can play story → hard → hardcore → the End → peaceful, start to
+finish, and it holds 10–20 hours.
+
+**Content & systems (the playtest queue below, then):**
+- 0.11 Grid inventory (4 hotbar + Tarkov grid, item icons)
+- 0.12 Storage & stations (chest/crate/cabinet/drawers, furnace + charcoal,
+  workbench) — chests need the grid, so it comes second
+- 0.13 Cloth & dye chain + lighting overhaul (held/thrown torches, fire
+  spread, iron lamp)
+- 0.14 Environment depth + biomes formalized + snake & crow
+- 0.15 **Fishing** — an island survival game without fishing is missing a
+  limb: rod (branch+string), shore vs deep (raft) catches, cooking
+- 0.16 **Weather** — rain (fires gutter, visibility drops), storms at sea
+  (sailing risk), fog nights (wolves closer than they sound); pure atmosphere
+  until hard mode weaponizes it
+- 0.17 **Chain #3: the Depths** — the awakened monolith opens the descent;
+  underground biome, the last ore, ties into the Long Game's End
+- 0.18–0.19 **The Long Game** — hard mode waves, hardcore gauntlet, game
+  over (sealed worlds), the End, peaceful mode + brick; farming & taming
+  land here as peaceful-mode systems (the ∞ tier)
+- 0.20+ Balance campaign: scripted bot runs + real group playtests until the
+  10–20 h target holds
+
+**Product completeness (not content, still required for 1.0):**
+- Settings menu: audio sliders, mouse sensitivity, invert Y, FOV,
+  fullscreen/windowed, keybind remapping
+- Menu/ambient music + per-biome ambience (same procedural approach or
+  hand-made later)
+- Death rules decided and final (currently: keep inventory, respawn on
+  beach — too soft for hard mode; beds/bedrolls as spawn points)
+- Save versioning + migration (old worlds must survive updates)
+- Network resilience: rejoin-in-progress polish, graceful host-quit for
+  clients, error messages a human can read
+- Onboarding: the first 10 minutes watched over a stranger's shoulder,
+  goals-as-tutorial sharpened
+- Accessibility: text scale, colorblind-safe tier colors, hold-vs-toggle
+  sprint
+- Performance pass at 8 players + a fully built base
+
+**Steam (the hope, and the checklist):** Steamworks account ($100 one-time
+per game), store page live ≥2 weeks before launch, capsule art + trailer +
+6 screenshots, achievements (the goal ladder maps 1:1), cloud saves, Steam
+networking as an optional transport (fixes port-forwarding for good), review
+build. Maroon's pitch on the page: *"the co-op survival island where you
+cannot hurt each other — and the game can be beaten."* M2 follows once
+Maroon 1.0 is out and earning lessons.
+
+## Playtest queue (from mrrzone's first sessions)
 Big systems, in build order, each its own pass:
 1. **Building system** — ghost preview, snapping, foundation/floor/wall/
    doorway/door/window/stairs/roof, wood→stone→brick, hammer (approved scope,
    awaiting go).
 2. **Grid inventory** — 4 hotbar slots + Tarkov-style grid (start 2×4, packs
    expand it), multi-cell rotatable items with icons. Supersedes the earlier
-   "no grid" note — Riz's call after playtesting.
+   "no grid" note — mrrzone's call after playtesting.
 3. **Cloth & dye chain** — dead grass → string → cloth → berry/flower dyes →
    colored clothing; crafted shirts/pants as the *only* way to be dressed.
 4. **Environment depth** — broadleaf + birch trees, fallen-leaf litter, twigs,
