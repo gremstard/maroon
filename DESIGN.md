@@ -224,9 +224,18 @@ Formalize the zones that already exist and give each a resident threat:
 Hard-mode waves are drawn from the totem's biome: build on the shore, fight
 crows and wolves; build in the highlands, bears come. Location = loadout.
 
-## Deliberate non-goals
-- No PvP, ever. No raiding of other players' claims.
-- No chat/comms of any kind.
+## Deliberate non-goals — and the two-game decision (locked)
+- **No PvP, ever. This is now permanent.** The PvPvE itch — third-party
+  convergence, clutch turns, RPG raids, heli snipes — is real and worth
+  chasing, but it structurally requires strangers, big servers, and
+  server-authoritative netcode. It gets its own game: **M2** (working title) —
+  MMO-scale (Rust-scale: ~100–300/server) PvPvE, advanced tech ladder,
+  vehicles and firearms, likely absorbing the best of the SCAVOCK design doc
+  (box-rig, server authority from day one, playtime gating, noise/stealth).
+  M2 gets its own repo and design doc when it starts. Maroon answers every
+  future "what about PvP?" with one word: *M2.*
+- Maroon stays: PnPvE, 5–8 friends, tech ceiling at iron/scale (never a gun),
+  beatable, then peaceful. No raiding of claims. No chat/comms of any kind.
 - No wipes — worlds are meant to be kept.
 
 ## v0.9 status (this repo)
