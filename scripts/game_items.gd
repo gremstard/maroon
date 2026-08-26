@@ -10,6 +10,7 @@ const RECIPES := {
 	"stone_pick": {"wood": 4, "stone": 6, "string": 2},
 	"torch":      {"branch": 1, "fiber": 2},
 	"campfire":   {"wood": 8, "stone": 4},
+	"workbench":  {"wood": 12, "stone": 4},
 	"totem":      {"wood": 20, "stone": 10},
 	"forge":      {"stone": 20, "wood": 10},
 	"beacon":     {"wood": 10, "iron_ore": 3, "string": 2, "ancient_lens": 1},
@@ -55,10 +56,63 @@ const BUILD_PIECES := {
 const BCELL := 3.0
 const BWALL_H := 2.6
 
-const PLACEABLES := ["torch", "campfire", "totem", "forge", "beacon"]
+const PLACEABLES := ["torch", "campfire", "workbench", "totem", "forge", "beacon"]
 const MATERIALS := ["string", "iron_bar"]   # crafted items that go back into the inventory
+
+# What you can make with cold hands and a flat rock. Everything else needs
+# a station — the workbench for real carpentry, the forge for metal.
+const HAND_RECIPES := ["string", "crude_axe", "crude_pick", "spear",
+	"torch", "campfire", "hammer", "workbench"]
 const FORGE_ONLY := ["iron_bar", "iron_axe", "iron_pick", "iron_spear",
 	"iron_helm", "iron_chest", "scale_helm", "scale_chest"]
+
+static func station_for(recipe: String) -> String:
+	if recipe in FORGE_ONLY:
+		return "forge"
+	if recipe in HAND_RECIPES:
+		return ""
+	return "workbench"
+
+# Only these live on the hotbar; placeables are held via right-click → Hold.
+static func hotbar_eligible(item: String) -> bool:
+	return TOOL_STATS.has(item) or item == "hammer" or item in FOODS or item == "torch"
+
+const DESCRIPTIONS := {
+	"wood": "Split from the island's pines. Builds, burns, feeds the totem.",
+	"stone": "Loose or mined. The other half of everything.",
+	"branch": "Deadfall. The handle of every first tool.",
+	"fiber": "Pulled from dry grass. Twists into string.",
+	"string": "Two fibers, twisted. Holds the world together.",
+	"berries": "Safe to eat. Better in you than in a wolf.",
+	"raw_meat": "Cook it. You know better.",
+	"cooked_meat": "The good stuff. Fills you and heals a little.",
+	"hide": "Skinned from a kill. Coats, packs, and armor backing.",
+	"iron_ore": "Highland ore. The forge makes it honest.",
+	"iron_bar": "Smelted and ready for real tools.",
+	"moonstone": "It hums faintly. The reef, the raft, the monolith.",
+	"leviathan_scale": "Proof. Also the island's best armor.",
+	"torch": "Fire on a stick. Hold it, or plant it. The dark hates it.",
+	"campfire": "Cooks meat. Marks home.",
+	"workbench": "Real carpentry happens here. Place it, stand close, craft.",
+	"totem": "Claims this ground. Feed it wood or the rot returns.",
+	"forge": "Ore goes in. Iron comes out. Stand close to work it.",
+	"beacon": "Needs the peak. Calls across the sea.",
+	"journal": "The captain's last pages. Read them well.",
+	"rusted_key": "Swallowed whole by a wolf. The Ruins are waiting.",
+	"ancient_lens": "Focuses flame into signal. Iron, wood, and the peak.",
+}
+
+static func describe(item: String) -> String:
+	if item in DESCRIPTIONS:
+		return DESCRIPTIONS[item]
+	if item in CLOTHES:
+		var c: Dictionary = CLOTHES[item]
+		if c.get("carry", 0) > 0:
+			return "Worn on the %s. +%d carry." % [c["gear_slot"], c["carry"]]
+		return "Worn on the %s. %d%% damage off." % [c["gear_slot"], int(c.get("armor", 0.0) * 100)]
+	if TOOL_STATS.has(item):
+		return "A tool. Bind it, hold it, use it."
+	return ""
 
 # Clothing: what you wear is what you get (slots borrowed from a fellow
 # design doc, trimmed to four). armor = damage reduction; carry = extra
@@ -104,7 +158,8 @@ const NICE_NAMES := {
 	"leviathan_scale": "Leviathan Scale",
 	"hide": "Hide", "iron_bar": "Iron Bar", "forge": "Forge",
 	"torch": "Torch", "moonstone": "Moonstone", "raft": "Raft",
-	"hammer": "Hammer", "foundation": "Foundation", "floor": "Floor",
+	"hammer": "Hammer", "workbench": "Workbench",
+	"foundation": "Foundation", "floor": "Floor",
 	"half_wall": "Half Wall", "doorway": "Doorway", "window": "Window Wall",
 	"gable": "Gable", "roof": "Roof", "slope": "Sloped Roof",
 	"hatched": "Hatched Roof",

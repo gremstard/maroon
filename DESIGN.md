@@ -318,9 +318,26 @@ Big systems, in build order, each its own pass:
    iron buys.
 - Maroon stays: PnPvE, 5–8 friends, tech ceiling at iron/scale (never a gun),
   beatable, then peaceful. No raiding of claims. No chat/comms of any kind.
+- **Why no chat (decided):** Maroon groups are 1–8 people who already have a
+  group chat or a voice call — building comms would duplicate what every small
+  group brings with it. **M2 is the opposite case:** 50+ strangers can't share
+  a Discord call, so M2 needs **proximity voice + global chat + area chat +
+  group chat** — groups being small formal bands, which is also what disables
+  accidental friendly fire inside them.
 - No wipes — worlds are meant to be kept.
 
-## v0.11 status (this repo)
+## v0.12a status (this repo)
+Added in v0.12a — inventory & crafting depth: **right-click context menus** on
+pack stacks (preview swatch, name, description, Hold / Bind to hotbar / Drop);
+**Hold** carries anything temporarily without binding (placeables are hold-only
+now — they never sit on the hotbar); **crafting split by station** — bare hands
+make only the primitives (string, crude tools, torch, campfire, hammer,
+workbench), the new **Workbench** placeable unlocks real carpentry (stone
+tools, clothing, totem, beacon, raft), the forge keeps metal. C toggles the
+crafting list. **Controls** screen in the main menu. Rebuilt first-person arm
+(forearm + fist, tools gripped through the hand). Compact styled HUD status.
+
+## v0.11 status
 Added in v0.11 — **the grid inventory**: 4 hotbar **binding** slots (keys 1–4;
 crafts auto-bind; upgrades replace their lesser tool in place) + a Tarkov-style
 pack grid (4 × 2 cells, +1 row woven pack, +2 hide pack; stacks with per-item

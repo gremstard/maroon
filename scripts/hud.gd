@@ -80,7 +80,8 @@ func _build() -> void:
 	hp_bar = _bar(bl, "HP", Color(0.85, 0.25, 0.2))
 	hunger_bar = _bar(bl, "Food", Color(0.9, 0.65, 0.2))
 	inv_label = Label.new()
-	inv_label.add_theme_font_size_override("font_size", 14)
+	inv_label.add_theme_font_size_override("font_size", 12)
+	inv_label.modulate = Color(1, 1, 1, 0.8)
 	bl.add_child(inv_label)
 
 	# top-right: goal ladder
@@ -155,11 +156,13 @@ func _build() -> void:
 	columns.add_theme_constant_override("separation", 24)
 	craft_panel.add_child(columns)
 	_build_pack_panel(columns)
-	var cv := VBoxContainer.new()
+	craft_list_box = VBoxContainer.new()
+	craft_list_box.visible = false
+	var cv := craft_list_box
 	cv.custom_minimum_size = Vector2(560, 0)
 	columns.add_child(cv)
 	var ct := Label.new()
-	ct.text = "CRAFTING  (Tab to close — ⚒ items need a forge nearby)"
+	ct.text = "CRAFTING  (C to toggle — ⚒ needs a forge, ⚙ a workbench)"
 	ct.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cv.add_child(ct)
 	var grid := GridContainer.new()
@@ -168,7 +171,8 @@ func _build() -> void:
 	cv.add_child(grid)
 	for recipe in GameItems.RECIPES:
 		var b := Button.new()
-		var prefix := "⚒ " if recipe in GameItems.FORGE_ONLY else ""
+		var station := GameItems.station_for(recipe)
+		var prefix := "⚒ " if station == "forge" else ("⚙ " if station == "workbench" else "")
 		b.text = "%s%s  —  %s" % [prefix, GameItems.nice(recipe), GameItems.cost_text(recipe)]
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.add_theme_font_size_override("font_size", 13)
@@ -212,6 +216,10 @@ func _build_pack_panel(parent: Node) -> void:
 	t.text = "YOUR PACK"
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
+	var craft_btn := Button.new()
+	craft_btn.text = "Crafting  (C)"
+	craft_btn.pressed.connect(toggle_craft_list)
+	v.add_child(craft_btn)
 	pack_grid_area = Control.new()
 	pack_grid_area.custom_minimum_size = Vector2(Player.GRID_COLS * CELL_PX, 4 * CELL_PX)
 	pack_grid_area.gui_input.connect(_on_pack_input)
@@ -305,7 +313,7 @@ func _refresh_pack() -> void:
 		for c in chips.get_children():
 			c.queue_free()
 		var bindables: Array = player.owned_tools.keys()
-		for extra in ["torch", "campfire", "totem", "beacon", "cooked_meat", "berries"]:
+		for extra in ["torch", "cooked_meat", "berries"]:
 			if player.inv.get(extra, 0) > 0:
 				bindables.append(extra)
 		for tool in bindables:
@@ -317,8 +325,86 @@ func _refresh_pack() -> void:
 				_refresh_pack())
 			chips.add_child(chip)
 
+var ctx_menu: PanelContainer = null
+
+func _stack_at(cell: Vector2i) -> int:
+	for i in player.grid_stacks.size():
+		var s: Dictionary = player.grid_stacks[i]
+		if s["x"] >= 0 and cell.x >= s["x"] and cell.x < s["x"] + s["w"] \
+				and cell.y >= s["y"] and cell.y < s["y"] + s["h"]:
+			return i
+	return -1
+
+func _open_context(idx: int, at: Vector2) -> void:
+	if ctx_menu:
+		ctx_menu.queue_free()
+	var s: Dictionary = player.grid_stacks[idx]
+	var item: String = s["item"]
+	ctx_menu = PanelContainer.new()
+	ctx_menu.position = at + Vector2(8, -8)
+	get_child(0).add_child(ctx_menu)
+	var v := VBoxContainer.new()
+	v.custom_minimum_size = Vector2(230, 0)
+	v.add_theme_constant_override("separation", 6)
+	ctx_menu.add_child(v)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	v.add_child(head)
+	var swatch := ColorRect.new()
+	swatch.color = GameItems.icon_color(item)
+	swatch.custom_minimum_size = Vector2(42, 42)
+	head.add_child(swatch)
+	var nm := Label.new()
+	nm.text = "%s  ×%d" % [GameItems.nice(item), s["count"]]
+	head.add_child(nm)
+	var desc := Label.new()
+	desc.text = GameItems.describe(item)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.custom_minimum_size = Vector2(230, 0)
+	desc.add_theme_font_size_override("font_size", 12)
+	desc.modulate = Color(1, 1, 1, 0.7)
+	v.add_child(desc)
+	var close := func() -> void:
+		if ctx_menu:
+			ctx_menu.queue_free()
+			ctx_menu = null
+	if item in GameItems.PLACEABLES or GameItems.hotbar_eligible(item):
+		var hold := Button.new()
+		hold.text = "Hold"
+		hold.pressed.connect(func() -> void:
+			player.hold_item(item)
+			close.call())
+		v.add_child(hold)
+	if GameItems.hotbar_eligible(item):
+		var bind := Button.new()
+		bind.text = "Bind to hotbar"
+		bind.pressed.connect(func() -> void:
+			player._auto_hotbar(item)
+			close.call()
+			_refresh_pack())
+		v.add_child(bind)
+	var drop := Button.new()
+	drop.text = "Drop stack"
+	drop.pressed.connect(func() -> void:
+		player.inv[item] = maxi(player.inv.get(item, 0) - int(s["count"]), 0)
+		player.reconcile_grid()
+		close.call()
+		_refresh_pack())
+	v.add_child(drop)
+
 func _on_pack_input(ev: InputEvent) -> void:
-	if not (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT):
+	if not (ev is InputEventMouseButton and ev.pressed):
+		return
+	if ctx_menu:
+		ctx_menu.queue_free()
+		ctx_menu = null
+	if ev.button_index == MOUSE_BUTTON_RIGHT:
+		var rcell := Vector2i(int(ev.position.x / CELL_PX), int(ev.position.y / CELL_PX))
+		var ridx := _stack_at(rcell)
+		if ridx >= 0:
+			_open_context(ridx, pack_grid_area.global_position + ev.position)
+		return
+	if ev.button_index != MOUSE_BUTTON_LEFT:
 		return
 	var cell := Vector2i(int(ev.position.x / CELL_PX), int(ev.position.y / CELL_PX))
 	if _carry_idx >= 0 and _carry_idx < player.grid_stacks.size():
@@ -338,6 +424,13 @@ func _on_pack_input(ev: InputEvent) -> void:
 			_carry_idx = i
 			_refresh_pack()
 			return
+
+var craft_list_box: VBoxContainer = null
+
+func toggle_craft_list() -> void:
+	if not craft_panel.visible:
+		toggle_craft()
+	craft_list_box.visible = not craft_list_box.visible
 
 var pause_panel: PanelContainer = null
 
@@ -435,28 +528,24 @@ func _process(delta: float) -> void:
 		_pack_refresh = 0.0
 		_refresh_pack()
 
-	var inv_lines: PackedStringArray = []
-	for item in player.inv:
-		if player.inv[item] > 0:
-			inv_lines.append("%s: %d" % [GameItems.nice(item), player.inv[item]])
-	var tools: PackedStringArray = []
-	for t in player.owned_tools:
-		tools.append(GameItems.nice(t))
-	var gear: PackedStringArray = []
-	for gear_slot in player.equipment:
-		gear.append(GameItems.nice(player.equipment[gear_slot]))
-	var status := "\nArmor: %d%%   Carry: %d/%d%s" % [
+	# compact status: essentials only — the pack (Tab) holds the details
+	var key_res: PackedStringArray = []
+	for item in ["wood", "stone", "fiber", "string", "berries"]:
+		if player.inv.get(item, 0) > 0:
+			key_res.append("%s %d" % [GameItems.nice(item), player.inv[item]])
+	var over := player.weight_mult() < 1.0
+	var line2 := "Armor %d%% · Carry %d/%d%s" % [
 		int(player.armor_total() * 100), player.carry_weight(), player.carry_cap(),
-		"  (OVERLOADED — slowed)" if player.weight_mult() < 1.0 else ""]
+		" · OVERLOADED" if over else ""]
 	var build_line := ""
 	if player.held_item() == "hammer" and player.owned_tools.has("hammer"):
 		var piece := player.build_piece_name()
-		build_line = "\nBUILD: %s (%d wood)   scroll: piece · R: rotate · click: place · E: repair/doors · X: demolish" % [
+		build_line = "\n%s — %d wood · scroll piece · R rotate · E repair · X demolish" % [
 			GameItems.nice(piece), GameItems.BUILD_PIECES[piece]["wood"]]
-	inv_label.text = "  ".join(inv_lines) \
-		+ ("\nTools: " + ", ".join(tools) if tools.size() > 0 else "") \
-		+ ("\nWearing: " + ", ".join(gear) if gear.size() > 0 else "") \
-		+ status + build_line
+	elif player.temp_held != "":
+		build_line = "\nHolding: %s" % GameItems.nice(player.temp_held)
+	inv_label.text = " · ".join(key_res) + ("\n" if key_res.size() > 0 else "") + line2 + build_line
+	inv_label.modulate = Color(1, 0.75, 0.5) if over else Color(1, 1, 1, 0.8)
 
 	var w := _world()
 	if w:

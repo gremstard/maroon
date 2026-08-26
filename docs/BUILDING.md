@@ -20,11 +20,12 @@ Or open the folder in the Godot editor and press Play.
 | Key | Action |
 |-----|--------|
 | WASD / Space / Shift | Move / jump / sprint |
-| Mouse + Left click | Look / swing, place, eat |
-| 1–0 | Hotbar |
-| E | Interact — cook, feed totem, loot, doors, board raft |
-| Tab | Crafting menu |
-| 7 + scroll / R / X | Build mode: piece select / rotate / demolish |
+| Mouse + Left click | Look / swing, place, eat what you hold |
+| 1–4 | Hotbar (bindings; crafts auto-bind) |
+| E | Interact — cook, feed totem, loot, doors, board raft, repair |
+| Tab | Pack (right-click stacks for options) |
+| C | Crafting list |
+| Hammer held + scroll / R / X | Build: piece select / rotate / demolish |
 | Esc | Pause menu |
 
 ## Dedicated server

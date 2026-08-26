@@ -169,12 +169,15 @@ func _physics_process(delta: float) -> void:
 		for i in HOTBAR_SLOTS:
 			if Input.is_action_just_pressed("slot_%d" % (i + 1)):
 				selected_slot = i
+				temp_held = ""
 		if Input.is_action_just_pressed("attack"):
 			_use_selected()
 		if Input.is_action_just_pressed("interact"):
 			_interact()
 	if Input.is_action_just_pressed("craft_menu") and hud:
 		hud.toggle_craft()
+	if Input.is_action_just_pressed("toggle_crafting") and hud:
+		hud.toggle_craft_list()
 
 	# replicate
 	_sync_accum += delta
@@ -474,17 +477,27 @@ func current_tool() -> String:
 	var held := held_item()
 	return held if GameItems.TOOL_STATS.has(held) else "hand"
 
+var temp_held := ""   # right-click → Hold: carried without a hotbar binding
+
 func held_item() -> String:
+	if temp_held != "":
+		# non-tools evaporate from the hand when you run out
+		if GameItems.TOOL_STATS.has(temp_held) or temp_held == "hammer" or inv.get(temp_held, 0) > 0:
+			return temp_held
+		temp_held = ""
 	return hotbar_items[selected_slot]
+
+func hold_item(item: String) -> void:
+	temp_held = item
+	if hud:
+		hud.flash("Holding %s. Press a hotbar key to put it away." % GameItems.nice(item))
 
 func set_hotbar(slot: int, item: String) -> void:
 	hotbar_items[slot] = item
 
 func _auto_hotbar(item: String) -> void:
 	# A fresh craft jumps into your hands if there's room for it.
-	var bindable := GameItems.TOOL_STATS.has(item) or item == "hammer" \
-		or item in GameItems.PLACEABLES or item in GameItems.FOODS
-	if not bindable or item in hotbar_items:
+	if not GameItems.hotbar_eligible(item) or item in hotbar_items:
 		# upgraded tool replaces its lesser cousin in place
 		for cat in ["axe", "pick", "spear"]:
 			if item == best_tool(cat):
@@ -803,9 +816,25 @@ func _update_viewmodel() -> void:
 	_viewmodel.scale = Vector3.ONE * 0.8
 	var wood := Color(0.42, 0.30, 0.17)
 	var head_c: Color = TOOL_MATERIAL_COLORS.get(tool.get_slice("_", 0), Color(0.5, 0.5, 0.5))
-	_vm_box(_viewmodel, Vector3(0.06, 0.06, 0.22), _skin_color, Vector3(0, -0.03, 0.05), -20)   # forearm/hand
+	# a proper arm: forearm rising from the bottom edge into a fist at the grip
+	var arm := Node3D.new()
+	arm.rotation_degrees = Vector3(-34, 10, 6)
+	_viewmodel.add_child(arm)
+	var apart := func(parent: Node3D, size: Vector3, c: Color, pos: Vector3) -> void:
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = size
+		mi.mesh = bm
+		mi.material_override = _flat(c)
+		mi.position = pos
+		parent.add_child(mi)
+	apart.call(arm, Vector3(0.068, 0.068, 0.28), _skin_color, Vector3(0, -0.01, 0.16))   # forearm
+	apart.call(arm, Vector3(0.092, 0.084, 0.11), _skin_color, Vector3(0, 0.0, -0.01))    # fist
+	var mount := Node3D.new()
+	mount.position = Vector3(0, 0.0, -0.01)
+	arm.add_child(mount)
 	if tool == "torch":
-		_vm_box(_viewmodel, Vector3(0.05, 0.05, 0.4), wood, Vector3(0, 0.06, -0.1), -50)
+		apart.call(mount, Vector3(0.045, 0.5, 0.045), wood, Vector3(0, 0.16, 0))
 		var flame := MeshInstance3D.new()
 		var fm := SphereMesh.new()
 		fm.radius = 0.07
@@ -817,37 +846,26 @@ func _update_viewmodel() -> void:
 		fmat.emission = Color(1.0, 0.65, 0.15)
 		fmat.emission_energy_multiplier = 3.0
 		flame.material_override = fmat
-		flame.position = Vector3(0, 0.32, -0.26)
-		_viewmodel.add_child(flame)
+		flame.position = Vector3(0, 0.46, 0)
+		mount.add_child(flame)
 		return
 	if tool == "hammer":
-		_vm_box(_viewmodel, Vector3(0.045, 0.045, 0.34), wood, Vector3(0, 0.03, -0.1), -35)
-		_vm_box(_viewmodel, Vector3(0.1, 0.1, 0.14), Color(0.45, 0.45, 0.48), Vector3(0, 0.16, -0.26), -35)
+		apart.call(mount, Vector3(0.042, 0.34, 0.042), wood, Vector3(0, 0.1, 0))
+		apart.call(mount, Vector3(0.09, 0.085, 0.15), Color(0.45, 0.45, 0.48), Vector3(0, 0.3, 0))
 		return
 	if not GameItems.TOOL_STATS.has(tool):
 		return
-	# all tool parts share one tilted root so they stay attached
-	var tool_root := Node3D.new()
-	tool_root.position = Vector3(0, 0.0, -0.02)
-	tool_root.rotation_degrees.x = -35
-	_viewmodel.add_child(tool_root)
-	var part := func(size: Vector3, c: Color, pos: Vector3) -> void:
-		var mi := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = size
-		mi.mesh = bm
-		mi.material_override = _flat(c)
-		mi.position = pos
-		tool_root.add_child(mi)
+	# handled tools lie forward through the fist
+	mount.rotation_degrees.x = -14
 	if tool.ends_with("axe"):
-		part.call(Vector3(0.04, 0.04, 0.42), wood, Vector3(0, 0, -0.10))
-		part.call(Vector3(0.04, 0.15, 0.10), head_c, Vector3(0, 0.05, -0.29))
+		apart.call(mount, Vector3(0.04, 0.04, 0.46), wood, Vector3(0, 0, -0.1))
+		apart.call(mount, Vector3(0.04, 0.15, 0.1), head_c, Vector3(0, 0.05, -0.3))
 	elif tool.ends_with("pick"):
-		part.call(Vector3(0.04, 0.04, 0.42), wood, Vector3(0, 0, -0.10))
-		part.call(Vector3(0.04, 0.05, 0.30), head_c, Vector3(0, 0.05, -0.29))
+		apart.call(mount, Vector3(0.04, 0.04, 0.46), wood, Vector3(0, 0, -0.1))
+		apart.call(mount, Vector3(0.04, 0.05, 0.32), head_c, Vector3(0, 0.05, -0.3))
 	elif tool.ends_with("spear"):
-		part.call(Vector3(0.035, 0.035, 0.72), wood, Vector3(0, 0, -0.22))
-		part.call(Vector3(0.045, 0.045, 0.12), head_c, Vector3(0, 0, -0.62))
+		apart.call(mount, Vector3(0.035, 0.035, 0.78), wood, Vector3(0, 0, -0.2))
+		apart.call(mount, Vector3(0.045, 0.045, 0.13), head_c, Vector3(0, 0, -0.62))
 
 func _swing_feel(hit_sound: String, hit_pos: Variant) -> void:
 	Sfx.play(self, "whoosh", -10.0)
@@ -1244,9 +1262,13 @@ func _try_embark() -> void:
 		hud.flash("Wade into the shallows to launch the raft.")
 
 func craft(recipe: String) -> void:
-	if recipe in GameItems.FORGE_ONLY and not _near_struct("forge", 6.0):
+	var station := GameItems.station_for(recipe)
+	if station != "" and not _near_struct(station, 6.0):
 		if hud:
-			hud.flash("This needs a forge's heat. Build one (stone + wood) and stand close.")
+			if station == "forge":
+				hud.flash("This needs a forge's heat. Build one (stone + wood) and stand close.")
+			else:
+				hud.flash("Too fiddly for cold hands — craft a Workbench and stand at it.")
 		return
 	var cost: Dictionary = GameItems.RECIPES[recipe]
 	for mat in cost:

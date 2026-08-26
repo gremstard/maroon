@@ -150,7 +150,11 @@ func _ready() -> void:
 			pl.set_hotbar(3, "cooked_meat")
 			pl.reconcile_grid()
 			pl.hud.toggle_craft()
-			await get_tree().create_timer(0.6).timeout
+			await get_tree().create_timer(0.5).timeout
+			pl.hud._refresh_pack()
+			if pl.grid_stacks.size() > 5:
+				pl.hud._open_context(5, Vector2(340, 330))
+			await get_tree().create_timer(0.3).timeout
 		if "--shot-lev" in args:
 			world._summon_leviathan()
 			await get_tree().create_timer(4.0).timeout
@@ -191,7 +195,7 @@ func _register_inputs() -> void:
 		"slot_1": KEY_1, "slot_2": KEY_2, "slot_3": KEY_3, "slot_4": KEY_4,
 		"slot_5": KEY_5, "slot_6": KEY_6, "slot_7": KEY_7, "slot_8": KEY_8,
 		"slot_9": KEY_9, "slot_10": KEY_0,
-		"build_rotate": KEY_R, "demolish": KEY_X,
+		"build_rotate": KEY_R, "demolish": KEY_X, "toggle_crafting": KEY_C,
 	}
 	for action in keys:
 		if not InputMap.has_action(action):
@@ -271,6 +275,7 @@ func _build_menu() -> void:
 		"My Worlds": func() -> void: _show_ctx("worlds"),
 		"Join a World": func() -> void: _show_ctx("join"),
 		"Added Worlds": func() -> void: _show_ctx("added"),
+		"Controls": func() -> void: _show_ctx("controls"),
 	}
 	for label in nav:
 		var b := Button.new()
@@ -325,6 +330,12 @@ func _show_ctx(mode: String) -> void:
 			jb.text = "Join"
 			jb.pressed.connect(_on_join_pressed)
 			ctx_box.add_child(jb)
+		"controls":
+			var cl := Label.new()
+			cl.text = CONTROLS_TEXT
+			cl.add_theme_font_size_override("font_size", 12)
+			cl.modulate = Color(1, 1, 1, 0.75)
+			ctx_box.add_child(cl)
 		"added":
 			var servers := _list_servers()
 			if servers.is_empty():
@@ -336,6 +347,13 @@ func _show_ctx(mode: String) -> void:
 					ip_edit.text = ip
 					_on_join_pressed())
 				ctx_box.add_child(b)
+
+const CONTROLS_TEXT := """WASD · Space · Shift — move · jump · sprint
+Left click — swing / place / eat what you hold
+1–4 — hotbar   ·   E — interact / doors / cook / feed totem
+Tab — pack   ·   C — crafting   ·   right-click a stack — options
+Hammer held: scroll piece · R rotate · click place · E repair · X demolish
+Esc — pause"""
 
 func _ctx_note(t: String) -> void:
 	var l := Label.new()
@@ -692,12 +710,17 @@ func _run_smoke_test() -> void:
 	print("[smoke] wood after chop: ", p.inv.get("wood", 0))
 	ok = ok and p.inv.get("wood", 0) > 0
 
-	# crafting
+	# crafting — advanced recipes need a workbench nearby
 	p.inv["wood"] = 50
 	p.inv["stone"] = 30
 	p.inv["string"] = 6
 	p.total_gathered["wood"] = 50
 	p.total_gathered["stone"] = 30
+	p.craft("stone_axe")   # no workbench yet — must refuse
+	ok = ok and not p.owned_tools.has("stone_axe")
+	p.craft("workbench")   # hand-craftable
+	world.sv_place_structure("workbench", p.global_position + Vector3(-2, 0, 1), 0.0)
+	await get_tree().create_timer(0.2).timeout
 	p.craft("stone_axe")
 	p.craft("campfire")
 	p.craft("totem")
@@ -799,8 +822,10 @@ func _run_smoke_test() -> void:
 	var far_h: float = world.height_at(far3.x, far3.z)
 	print("[smoke] far isle at %.0f,%.0f h=%.1f" % [far3.x, far3.z, far_h])
 	ok = ok and far_h > 2.0
-	p.inv["wood"] = 30
+	p.inv["wood"] = 45
 	p.inv["string"] = p.inv.get("string", 0) + 4
+	world.sv_place_structure("workbench", p.global_position + Vector3(2, 0, 2), 0.0)
+	await get_tree().create_timer(0.2).timeout
 	p.craft("raft")
 	ok = ok and p.owned_tools.has("raft")
 	p.global_position = Vector3(far3.x, far_h + 1.0, far3.z)

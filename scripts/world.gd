@@ -675,6 +675,35 @@ func rx_place_structure(sname: String, kind: String, pos: Vector3, yaw: float) -
 			tcs.height = 1.2
 			shape.shape = tcs
 			shape.position.y = 0.6
+		"workbench":
+			body.set_meta("hp", 200.0)
+			var top := MeshInstance3D.new()
+			var tbm := BoxMesh.new()
+			tbm.size = Vector3(1.8, 0.12, 0.9)
+			top.mesh = tbm
+			top.material_override = _flat_mat(Color(0.50, 0.38, 0.24))
+			top.position.y = 0.9
+			body.add_child(top)
+			for lx in [-0.8, 0.8]:
+				for lz in [-0.35, 0.35]:
+					var leg := MeshInstance3D.new()
+					var lbm := BoxMesh.new()
+					lbm.size = Vector3(0.12, 0.9, 0.12)
+					leg.mesh = lbm
+					leg.material_override = _flat_mat(Color(0.40, 0.29, 0.17))
+					leg.position = Vector3(lx, 0.45, lz)
+					body.add_child(leg)
+			var vice := MeshInstance3D.new()
+			var vbm := BoxMesh.new()
+			vbm.size = Vector3(0.2, 0.18, 0.2)
+			vice.mesh = vbm
+			vice.material_override = _flat_mat(Color(0.45, 0.45, 0.48))
+			vice.position = Vector3(0.7, 1.05, 0)
+			body.add_child(vice)
+			var wcs := BoxShape3D.new()
+			wcs.size = Vector3(1.8, 1.1, 0.9)
+			shape.shape = wcs
+			shape.position.y = 0.55
 		"forge":
 			body.set_meta("hp", 300.0)
 			var block := MeshInstance3D.new()
