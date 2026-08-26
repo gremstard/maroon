@@ -159,6 +159,22 @@ func _ready() -> void:
 					await get_tree().create_timer(0.2).timeout
 					pl.hud.open_container(String(s.name))
 			await get_tree().create_timer(0.5).timeout
+		if "--shot-fish" in args:
+			pl.owned_tools["fishing_rod"] = true
+			pl.set_hotbar(2, "fishing_rod")
+			pl.selected_slot = 2
+			var pond: Vector2 = world.pond_centers[0]
+			var pdir := Vector2(1, 0.3).normalized()
+			var edge := pond + pdir * 8.0
+			while world.height_at(edge.x, edge.y) < 0.4:
+				edge += pdir * 1.5   # back up onto dry rim
+			pl.global_position = Vector3(edge.x, world.height_at(edge.x, edge.y) + 1.0, edge.y)
+			var to_pond := Vector2(pond.x - edge.x, pond.y - edge.y).normalized()
+			pl.rotation.y = atan2(-to_pond.x, -to_pond.y)
+			pl.head.rotation.x = -0.35
+			await get_tree().create_timer(0.4).timeout
+			pl._try_fish()
+			await get_tree().create_timer(0.4).timeout
 		if "--shot-isle" in args:
 			pl.global_position = Vector3(0, 165, 120)
 			pl.velocity = Vector3.ZERO
@@ -876,6 +892,16 @@ func _run_smoke_test() -> void:
 	print("[smoke] grid: %d stacks, axe bound=%s, rows=%d" % [p.grid_stacks.size(), "crude_axe" in p.hotbar_items, p.grid_rows()])
 	ok = ok and p.grid_stacks.size() > 0 and "crude_axe" in p.hotbar_items
 	ok = ok and p.held_item() == p.hotbar_items[p.selected_slot]
+
+	# fishing: rod crafts by hand, catches land in the pack, fire cooks them
+	p.inv["branch"] = p.inv.get("branch", 0) + 2
+	p.inv["string"] = p.inv.get("string", 0) + 2
+	p.craft("fishing_rod")
+	ok = ok and p.owned_tools.has("fishing_rod")
+	p._fish_deep = false
+	p._finish_catch()
+	print("[smoke] fishing: rod=%s raw_fish=%d" % [p.owned_tools.has("fishing_rod"), p.inv.get("raw_fish", 0)])
+	ok = ok and p.inv.get("raw_fish", 0) >= 1
 
 	# biomes + new fauna + poison cure
 	var biomes := {}

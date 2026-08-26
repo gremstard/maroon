@@ -9,6 +9,7 @@ const RECIPES := {
 	"stone_axe":  {"wood": 4, "stone": 6, "string": 2},
 	"stone_pick": {"wood": 4, "stone": 6, "string": 2},
 	"torch":      {"branch": 1, "fiber": 2},
+	"fishing_rod": {"branch": 2, "string": 2},
 	"campfire":   {"wood": 8, "stone": 4},
 	"workbench":  {"wood": 12, "stone": 4},
 	"crate":      {"wood": 6},
@@ -86,7 +87,7 @@ const MATERIALS := ["string", "iron_bar", "cloth", "red_dye", "yellow_dye", "bla
 # a station — the workbench for real carpentry, the forge for metal.
 const HAND_RECIPES := ["string", "crude_axe", "crude_pick", "spear",
 	"torch", "campfire", "hammer", "workbench", "crate",
-	"red_dye", "yellow_dye", "black_dye"]
+	"red_dye", "yellow_dye", "black_dye", "fishing_rod"]
 const FORGE_ONLY := ["iron_bar", "iron_axe", "iron_pick", "iron_spear",
 	"iron_helm", "iron_chest", "scale_helm", "scale_chest", "lamp"]
 
@@ -130,6 +131,10 @@ const DESCRIPTIONS := {
 	"black_dye": "Charcoal, ground fine.",
 	"painting": "Every one comes out different. Hang it on a wall.",
 	"lamp": "Iron-caged light. No flame, no fire risk — and it glows from your pack.",
+	"fishing_rod": "Branch, string, patience. Cast into ponds or the sea.",
+	"raw_fish": "Cook it. The sea forgives nothing raw.",
+	"cooked_fish": "Flaky, hot, honest food.",
+	"moonfin": "It glows faintly, like the stone the reef hides. Eat it and feel new.",
 	"totem": "Claims this ground. Feed it wood or the rot returns.",
 	"forge": "Ore goes in. Iron comes out. Stand close to work it.",
 	"beacon": "Needs the peak. Calls across the sea.",
@@ -209,6 +214,8 @@ const NICE_NAMES := {
 	"pants_black": "Black Pants", "painting": "Painting", "lamp": "Iron Lamp",
 	"crate": "Crate", "chest": "Chest", "drawers": "Drawers",
 	"cabinet": "Cabinet", "furnace": "Furnace",
+	"fishing_rod": "Fishing Rod", "raw_fish": "Raw Fish",
+	"cooked_fish": "Cooked Fish", "moonfin": "Moonfin",
 	"foundation": "Foundation", "floor": "Floor",
 	"half_wall": "Half Wall", "doorway": "Doorway", "window": "Window Wall",
 	"gable": "Gable", "roof": "Roof", "slope": "Sloped Roof",
@@ -235,6 +242,7 @@ const TOOL_STATS := {
 	"iron_axe":   {"chop": 7.0, "mine": 0.0, "dmg": 28.0},
 	"iron_pick":  {"chop": 0.0, "mine": 7.0, "dmg": 24.0},
 	"iron_spear": {"chop": 0.0, "mine": 0.0, "dmg": 45.0},
+	"fishing_rod": {"chop": 0.0, "mine": 0.0, "dmg": 3.0},
 }
 
 # Resource nodes. "pickup" = hand-gatherable (any tool works, yields "count").
@@ -253,6 +261,9 @@ const FOODS := {
 	"berries":     {"hunger": 15.0, "hp": 0.0},
 	"raw_meat":    {"hunger": 10.0, "hp": -5.0},
 	"cooked_meat": {"hunger": 40.0, "hp": 10.0},
+	"raw_fish":    {"hunger": 8.0, "hp": -4.0},
+	"cooked_fish": {"hunger": 34.0, "hp": 8.0},
+	"moonfin":     {"hunger": 30.0, "hp": 25.0},   # deep-water rarity; eat it glowing
 }
 
 # ---------------------------------------------------------------- grid inventory
@@ -266,6 +277,7 @@ const STACK_MAX := {
 	"furnace": 2, "workbench": 2,
 	"cloth": 20, "red_dye": 10, "yellow_dye": 10, "black_dye": 10,
 	"lamp": 2, "painting": 3,
+	"raw_fish": 10, "cooked_fish": 10, "moonfin": 5,
 }
 
 static func stack_max(item: String) -> int:
@@ -289,6 +301,8 @@ const CATEGORY_COLORS := {
 	"torch": Color(0.70, 0.50, 0.25), "campfire": Color(0.60, 0.42, 0.22),
 	"totem": Color(0.55, 0.40, 0.45), "forge": Color(0.40, 0.40, 0.42),
 	"beacon": Color(0.65, 0.55, 0.30),
+	"raw_fish": Color(0.45, 0.55, 0.60), "cooked_fish": Color(0.60, 0.48, 0.30),
+	"moonfin": Color(0.55, 0.70, 0.90),
 	"charcoal": Color(0.20, 0.20, 0.22), "crate": Color(0.52, 0.40, 0.24),
 	"chest": Color(0.45, 0.32, 0.16), "drawers": Color(0.50, 0.36, 0.20),
 	"cabinet": Color(0.42, 0.30, 0.18), "furnace": Color(0.38, 0.38, 0.40),

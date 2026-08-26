@@ -46,6 +46,11 @@ func setup(s: int) -> void:
 		var pa := far_rng.randf() * TAU
 		var pr := far_rng.randf_range(25.0, 70.0)
 		pond_centers.append(Vector2(cos(pa), sin(pa)) * pr)
+	lobe_centers.clear()
+	for i in 2:
+		# peninsulas hanging off the rim — no island is round
+		var la := far_rng.randf() * TAU
+		lobe_centers.append(Vector2(cos(la), sin(la)) * SIZE * CELL * far_rng.randf_range(0.40, 0.48))
 
 	_build_environment()
 	_build_terrain()
@@ -67,6 +72,7 @@ const FAR_DIST := 235.0    # how far past the reef the Far Isle sits
 const FAR_R := 60.0        # its radius — smaller, taller, harsher
 var far_center := Vector2.ZERO
 var pond_centers: Array[Vector2] = []
+var lobe_centers: Array[Vector2] = []
 
 func _coast_wobble(v: Vector2, seed_off: float) -> float:
 	# No island in nature is a circle. The coastline radius breathes with
@@ -88,6 +94,12 @@ func height_at(x: float, z: float) -> float:
 		var ffall := clampf(1.0 - fr * fr * fr, 0.0, 1.0)
 		var fn := noise.get_noise_2d(x + 533.0, z - 777.0) * 0.5 + 0.5
 		h = maxf(h, (fn * 22.0 + 4.0) * ffall - 3.0)
+	for lobe in lobe_centers:
+		var lv := v - lobe
+		var lr := lv.length() / (30.0 * _coast_wobble(lv, 71.0))
+		var lfall := clampf(1.0 - lr * lr * lr, 0.0, 1.0)
+		var ln := noise.get_noise_2d(x - 311.0, z + 218.0) * 0.5 + 0.5
+		h = maxf(h, (ln * 9.0 + 2.5) * lfall - 3.0)
 	# ponds: gentle inland dips that fill with the sea-level water table
 	for p in pond_centers:
 		h -= 5.0 * exp(-v.distance_squared_to(p) / 90.0)

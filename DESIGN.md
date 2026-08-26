@@ -316,13 +316,14 @@ Big systems, in build order, each its own pass:
    **canvas** is the placeable (wall-hung; extra materials add a frame); using
    the kit on a canvas opens a **painting editor** — you paint it yourself.
    Salvage a painting, hang it elsewhere.
-6b. **Furnace attention economy (rework, queued)** — starting the furnace
-   requires *staying with it* until done (Esc doesn't pause it): it stays lit
-   until turned off or out of fuel; wrong fuel or inattention makes **ash**,
-   over/under-cooking makes too much or too little. The **Range** is the
-   expensive upgrade: better looking, set X amount, walk away, perfect
-   results. Attention is the cost; iron buys convenience — same philosophy
-   as torch vs lamp.
+6b. **Furnace attention economy (rework, queued)** — smelting is a **menu you
+   keep open**, watching the progress bar, pulling batches at the right
+   moment. **Esc is the emergency exit, not a pause**: the furnace keeps
+   burning unattended — that's *why* leaving produces ash (wrong fuel or
+   burnt batches) and over/under-production; it stays lit until turned off or
+   out of fuel. The **Range** is the expensive upgrade: better looking, set X
+   amount, walk away, come back to perfect results. Attention is the cost;
+   iron buys convenience — same law as torch vs lamp.
 7. **Lighting overhaul** — **torch**: holdable (lights around you while held),
    placeable on floor OR wall, **throwable**, but open flame: chance to set
    structures/grass/you on fire (campfires too — fire spread as a system).
@@ -338,6 +339,19 @@ Big systems, in build order, each its own pass:
   group chat** — groups being small formal bands, which is also what disables
   accidental friendly fire inside them.
 - No wipes — worlds are meant to be kept.
+
+## v0.15 status (this repo)
+Added in 0.15 — **fishing + hands & coastline fixes**: **Fishing Rod** (2
+branch + 2 string, hand-craftable) — cast at any water deeper than the rim
+(ponds or sea), watch the bobber, click the bite window; deep water bites
+faster and rarely yields **Moonfin** (glowing, +25 HP eaten raw); regular
+catches are **Raw Fish**, cooked at the campfire like meat. Fish join the
+food chain and the goal ladder (31 goals). Viewmodel per mrrzone's notes:
+the **forearm now runs off the bottom of the screen** (no floating stub),
+tools **rest upright** in the fist, and the chop swings the head forward and
+down to near-parallel with the ground. Coastlines gained **lobes** — seeded
+peninsulas hanging off the rim so the silhouette stops reading as a circle.
+Furnace-menu clarification recorded in 6b.
 
 ## v0.14 status (this repo)
 Added in 0.14 — **a natural world**: coastlines are no longer circles —

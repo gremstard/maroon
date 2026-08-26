@@ -27,6 +27,7 @@ func setup(p: Player) -> void:
 		["Chop 10 Wood", func(): return player.total_gathered.get("wood", 0) >= 10],
 		["Craft a Crude Pick, mine 8 Stone", func(): return player.crafted.has("crude_pick") and player.total_gathered.get("stone", 0) >= 8],
 		["Craft a Campfire; hunt a deer, cook its meat (E)", func(): return player.events.get("cooked", 0) >= 1],
+		["Craft a Fishing Rod — cast into a pond or the sea", func(): return player.total_gathered.get("raw_fish", 0) + player.total_gathered.get("moonfin", 0) >= 1],
 		["Weave fiber clothes (any piece)", func(): return player.equipment.size() >= 1],
 		["Find the shipwreck on the coast — loot its crates", func(): return player.events.get("looted_wreck", 0) >= 1],
 		["Build a Claim Totem — protect your home", func(): return player.crafted.has("totem")],

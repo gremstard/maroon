@@ -134,6 +134,7 @@ func _physics_process(delta: float) -> void:
 	_survival_tick(delta)
 	_update_viewmodel()
 	_update_ghost()
+	_fishing_tick(delta)
 	if sailing:
 		_sail(delta)
 		return
@@ -818,13 +819,12 @@ func _update_viewmodel() -> void:
 		_viewmodel.queue_free()
 	_viewmodel = Node3D.new()
 	cam.add_child(_viewmodel)
-	_viewmodel.position = Vector3(0.28, -0.24, -0.5)
-	_viewmodel.scale = Vector3.ONE * 0.8
+	_viewmodel.position = Vector3(0.33, -0.4, -0.55)
 	var wood := Color(0.42, 0.30, 0.17)
 	var head_c: Color = TOOL_MATERIAL_COLORS.get(tool.get_slice("_", 0), Color(0.5, 0.5, 0.5))
-	# a proper arm: forearm rising from the bottom edge into a fist at the grip
+	# the arm runs off the bottom edge of the screen — you never see its end
 	var arm := Node3D.new()
-	arm.rotation_degrees = Vector3(-34, 10, 6)
+	arm.rotation_degrees = Vector3(-48, 10, 7)
 	_viewmodel.add_child(arm)
 	var apart := func(parent: Node3D, size: Vector3, c: Color, pos: Vector3) -> void:
 		var mi := MeshInstance3D.new()
@@ -834,8 +834,8 @@ func _update_viewmodel() -> void:
 		mi.material_override = _flat(c)
 		mi.position = pos
 		parent.add_child(mi)
-	apart.call(arm, Vector3(0.068, 0.068, 0.28), _skin_color, Vector3(0, -0.01, 0.16))   # forearm
-	apart.call(arm, Vector3(0.092, 0.084, 0.11), _skin_color, Vector3(0, 0.0, -0.01))    # fist
+	apart.call(arm, Vector3(0.085, 0.085, 0.62), _skin_color, Vector3(0, -0.02, 0.32))   # forearm, into the camera
+	apart.call(arm, Vector3(0.1, 0.09, 0.12), _skin_color, Vector3(0, 0.0, -0.01))       # fist
 	var mount := Node3D.new()
 	mount.position = Vector3(0, 0.0, -0.01)
 	arm.add_child(mount)
@@ -861,32 +861,34 @@ func _update_viewmodel() -> void:
 		return
 	if not GameItems.TOOL_STATS.has(tool):
 		return
-	# handled tools lie forward through the fist
-	mount.rotation_degrees.x = -14
+	# tools rest UPRIGHT in the fist, head to the sky — the chop brings the
+	# head forward and down until it's near parallel with the ground
 	if tool.ends_with("axe"):
-		apart.call(mount, Vector3(0.04, 0.04, 0.46), wood, Vector3(0, 0, -0.1))
-		apart.call(mount, Vector3(0.04, 0.15, 0.1), head_c, Vector3(0, 0.05, -0.3))
+		apart.call(mount, Vector3(0.045, 0.52, 0.045), wood, Vector3(0, 0.18, 0))
+		apart.call(mount, Vector3(0.045, 0.12, 0.17), head_c, Vector3(0, 0.4, -0.05))
 	elif tool.ends_with("pick"):
-		apart.call(mount, Vector3(0.04, 0.04, 0.46), wood, Vector3(0, 0, -0.1))
-		apart.call(mount, Vector3(0.04, 0.05, 0.32), head_c, Vector3(0, 0.05, -0.3))
+		apart.call(mount, Vector3(0.045, 0.52, 0.045), wood, Vector3(0, 0.18, 0))
+		apart.call(mount, Vector3(0.045, 0.05, 0.36), head_c, Vector3(0, 0.4, 0))
 	elif tool.ends_with("spear"):
-		apart.call(mount, Vector3(0.035, 0.035, 0.78), wood, Vector3(0, 0, -0.2))
-		apart.call(mount, Vector3(0.045, 0.045, 0.13), head_c, Vector3(0, 0, -0.62))
+		apart.call(mount, Vector3(0.04, 1.0, 0.04), wood, Vector3(0, 0.3, 0))
+		apart.call(mount, Vector3(0.05, 0.14, 0.05), head_c, Vector3(0, 0.86, 0))
+	elif tool == "fishing_rod":
+		apart.call(mount, Vector3(0.035, 0.85, 0.035), wood, Vector3(0, 0.28, 0))
+		apart.call(mount, Vector3(0.012, 0.012, 0.5), Color(0.85, 0.85, 0.88), Vector3(0, 0.7, -0.25))
 
 func _swing_feel(hit_sound: String, hit_pos: Variant) -> void:
 	Sfx.play(self, "whoosh", -10.0)
 	if _viewmodel:
-		# wind up slightly, then a fast diagonal chop with eased recovery
+		# raise slightly, then the head arcs forward and DOWN — ending near
+		# parallel with the ground — then eases back upright
 		_viewmodel.rotation_degrees = Vector3.ZERO
-		_viewmodel.position = Vector3(0.28, -0.24, -0.5)
+		_viewmodel.position = Vector3(0.33, -0.4, -0.55)
 		var tw := create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(_viewmodel, "rotation_degrees:x", 14.0, 0.05).set_ease(Tween.EASE_OUT)
-		tw.chain().tween_property(_viewmodel, "rotation_degrees:x", -72.0, 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		tw.parallel().tween_property(_viewmodel, "rotation_degrees:z", 18.0, 0.08)
-		tw.parallel().tween_property(_viewmodel, "position:y", -0.30, 0.08)
-		tw.chain().tween_property(_viewmodel, "rotation_degrees", Vector3.ZERO, 0.28).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-		tw.parallel().tween_property(_viewmodel, "position", Vector3(0.28, -0.24, -0.5), 0.28).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_viewmodel, "rotation_degrees:x", 12.0, 0.05).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_viewmodel, "rotation_degrees:x", -98.0, 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.parallel().tween_property(_viewmodel, "position:y", -0.32, 0.09)
+		tw.tween_property(_viewmodel, "rotation_degrees:x", 0.0, 0.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(_viewmodel, "position:y", -0.4, 0.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	if hit_sound != "" and hit_pos is Vector3:
 		Sfx.play_at(_world(), hit_pos, hit_sound, -4.0)
 		var tw2 := create_tween()
@@ -1010,6 +1012,8 @@ func rx_tool(tool: String) -> void:
 	elif tool == "hammer":
 		part.call(Vector3(0.05, 0.4, 0.05), wood, Vector3(0, 0.12, 0))
 		part.call(Vector3(0.11, 0.12, 0.15), Color(0.45, 0.45, 0.48), Vector3(0, 0.34, 0))
+	elif tool == "fishing_rod":
+		part.call(Vector3(0.04, 0.9, 0.04), wood, Vector3(0, 0.3, 0))
 
 @rpc("any_peer", "call_remote", "unreliable")
 func rx_swing_fx() -> void:
@@ -1132,6 +1136,9 @@ func _use_selected() -> void:
 	if held in GameItems.FOODS:
 		_eat(held)
 		return
+	if held == "fishing_rod":
+		_try_fish()
+		return
 	if held in GameItems.PLACEABLES:
 		if held == "torch" and _raycast().is_empty():
 			_throw_torch()   # too far to plant? throw it
@@ -1139,6 +1146,91 @@ func _use_selected() -> void:
 		_place(held)
 		return
 	_swing()   # tools and bare hands
+
+# ---------------------------------------------------------------- fishing
+
+var _fish_state := ""        # "" | waiting | biting
+var _fish_t := 0.0
+var _fish_deep := false
+var _bobber: MeshInstance3D = null
+
+func _try_fish() -> void:
+	if _fish_state == "biting":
+		_finish_catch()
+		return
+	if _fish_state == "waiting":
+		_end_fishing("You reel in. Nothing yet — patience.")
+		return
+	var from := cam.global_position
+	var dir := -cam.global_transform.basis.z
+	if dir.y > -0.02:
+		if hud:
+			hud.flash("Aim down at the water.")
+		return
+	var t := (0.1 - from.y) / dir.y
+	var hitp := from + dir * t
+	if t < 1.0 or t > 30.0 or _world().height_at(hitp.x, hitp.z) > -0.2:
+		if hud:
+			hud.flash("Cast into open water — a pond or the sea.")
+		return
+	_fish_deep = _world().height_at(hitp.x, hitp.z) < -1.4
+	_fish_state = "waiting"
+	_fish_t = randf_range(3.0, 8.0) * (0.7 if _fish_deep else 1.0)
+	_bobber = MeshInstance3D.new()
+	var bm := SphereMesh.new()
+	bm.radius = 0.09
+	bm.height = 0.18
+	_bobber.mesh = bm
+	_bobber.material_override = _flat(Color(0.85, 0.2, 0.2))
+	_world().add_child(_bobber)
+	_bobber.global_position = Vector3(hitp.x, 0.12, hitp.z)
+	Sfx.play(self, "whoosh", -8.0)
+	if hud:
+		hud.flash("Cast. Watch the bobber…")
+
+func _fishing_tick(delta: float) -> void:
+	if _fish_state == "":
+		return
+	if held_item() != "fishing_rod" or Vector2(velocity.x, velocity.z).length() > 1.0:
+		_end_fishing("The line drags loose — you reel in.")
+		return
+	_fish_t -= delta
+	if _fish_state == "waiting" and _fish_t <= 0.0:
+		_fish_state = "biting"
+		_fish_t = 1.2
+		if _bobber:
+			_bobber.global_position.y = -0.08
+			_bobber.material_override.albedo_color = Color(1.0, 0.6, 0.1)
+		Sfx.play(self, "pickup", 0.0)
+		if hud:
+			hud.flash("A BITE — click!")
+	elif _fish_state == "biting" and _fish_t <= 0.0:
+		_fish_state = "waiting"
+		_fish_t = randf_range(2.0, 6.0)
+		if _bobber:
+			_bobber.global_position.y = 0.12
+			_bobber.material_override.albedo_color = Color(0.85, 0.2, 0.2)
+		if hud:
+			hud.flash("It slipped away…")
+
+func _finish_catch() -> void:
+	var fish := "raw_fish"
+	if _fish_deep and randf() < 0.15:
+		fish = "moonfin"
+	inv[fish] = inv.get(fish, 0) + 1
+	total_gathered[fish] = total_gathered.get(fish, 0) + 1
+	Sfx.play(self, "chime", -8.0)
+	if hud:
+		hud.flash("Caught a %s!" % GameItems.nice(fish))
+	_end_fishing("")
+
+func _end_fishing(msg: String) -> void:
+	_fish_state = ""
+	if _bobber:
+		_bobber.queue_free()
+		_bobber = null
+	if msg != "" and hud:
+		hud.flash(msg)
 
 func _throw_torch() -> void:
 	if inv.get("torch", 0) <= 0:
@@ -1249,7 +1341,7 @@ func _gather(col: Node) -> String:
 	return snd
 
 func _eat(preferred := "") -> void:
-	var order := [preferred] if preferred != "" else ["cooked_meat", "berries", "raw_meat"]
+	var order := [preferred] if preferred != "" else ["cooked_meat", "cooked_fish", "berries", "raw_meat", "raw_fish"]
 	for food in order:
 		if inv.get(food, 0) > 0:
 			inv[food] -= 1
@@ -1341,14 +1433,19 @@ func _interact() -> void:
 	if col is Node and col.has_meta("struct"):
 		var kind: String = col.get_meta("kind")
 		if kind == "campfire":
-			if inv.get("raw_meat", 0) > 0:
-				inv["raw_meat"] -= 1
-				inv["cooked_meat"] = inv.get("cooked_meat", 0) + 1
-				events["cooked"] = events.get("cooked", 0) + 1
-				if hud:
-					hud.flash("Cooked meat over the fire.")
-			elif hud:
-				hud.flash("No raw meat to cook. Hunt a deer.")
+			var cooked_something := false
+			for pair in [["raw_meat", "cooked_meat"], ["raw_fish", "cooked_fish"]]:
+				if inv.get(pair[0], 0) > 0:
+					inv[pair[0]] -= 1
+					inv[pair[1]] = inv.get(pair[1], 0) + 1
+					events["cooked"] = events.get("cooked", 0) + 1
+					Sfx.play(self, "eat", -10.0)
+					if hud:
+						hud.flash("Cooked %s over the fire." % GameItems.nice(pair[1]))
+					cooked_something = true
+					break
+			if not cooked_something and hud:
+				hud.flash("Nothing raw to cook. Hunt a deer or cast a line.")
 		elif kind in GameItems.CONTAINERS:
 			if hud:
 				hud.open_container(String(col.name))
