@@ -177,54 +177,179 @@ func _build_menu() -> void:
 	menu.add_child(center)
 
 	var columns := HBoxContainer.new()
-	columns.add_theme_constant_override("separation", 48)
+	columns.add_theme_constant_override("separation", 56)
 	center.add_child(columns)
 
 	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(340, 0)
-	box.add_theme_constant_override("separation", 10)
+	box.custom_minimum_size = Vector2(360, 0)
+	box.add_theme_constant_override("separation", 8)
 	columns.add_child(box)
 	_build_character_panel(columns)
 
+	var emblem := TextureRect.new()
+	emblem.texture = load("res://icon.png")
+	emblem.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	emblem.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	emblem.custom_minimum_size = Vector2(0, 130)
+	box.add_child(emblem)
+
 	var title := Label.new()
 	title.text = "M A R O O N"
-	title.add_theme_font_size_override("font_size", 52)
+	title.add_theme_font_size_override("font_size", 46)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
 
 	var sub := Label.new()
 	sub.text = "you, your friends, and the wilderness"
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.modulate = Color(1, 1, 1, 0.6)
+	sub.modulate = Color(1, 1, 1, 0.55)
 	box.add_child(sub)
+
+	var byline := Label.new()
+	byline.text = "BRAIN DUMP INNERACTIVE"
+	byline.add_theme_font_size_override("font_size", 11)
+	byline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	byline.modulate = Color(1, 1, 1, 0.3)
+	box.add_child(byline)
 
 	box.add_child(HSeparator.new())
 
 	seed_edit = LineEdit.new()
 	seed_edit.placeholder_text = "world seed (blank = random)"
-	box.add_child(seed_edit)
-
-	var host_btn := Button.new()
-	host_btn.text = "Host Island"
-	host_btn.pressed.connect(_on_host_pressed)
-	box.add_child(host_btn)
-
-	box.add_child(HSeparator.new())
-
 	ip_edit = LineEdit.new()
 	ip_edit.text = "127.0.0.1"
-	ip_edit.placeholder_text = "friend's IP address"
-	box.add_child(ip_edit)
+	ip_edit.placeholder_text = "host's IP address"
 
-	var join_btn := Button.new()
-	join_btn.text = "Join Friend"
-	join_btn.pressed.connect(_on_join_pressed)
-	box.add_child(join_btn)
+	var nav := {
+		"New World": func() -> void: _show_ctx("new"),
+		"Continue": func() -> void: _continue_latest(),
+		"My Worlds": func() -> void: _show_ctx("worlds"),
+		"Join a World": func() -> void: _show_ctx("join"),
+		"Added Worlds": func() -> void: _show_ctx("added"),
+	}
+	for label in nav:
+		var b := Button.new()
+		b.text = label
+		b.pressed.connect(nav[label])
+		box.add_child(b)
+		if label == "Continue":
+			b.disabled = _list_worlds().is_empty()
+
+	ctx_box = VBoxContainer.new()
+	ctx_box.add_theme_constant_override("separation", 6)
+	box.add_child(ctx_box)
 
 	status_label = Label.new()
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_label.modulate = Color(1, 0.85, 0.6)
 	box.add_child(status_label)
+
+# ------------------------------------------------- menu context panels
+
+var ctx_box: VBoxContainer
+
+func _clear_ctx() -> void:
+	for c in ctx_box.get_children():
+		ctx_box.remove_child(c)
+		if c != seed_edit and c != ip_edit:
+			c.queue_free()
+
+func _show_ctx(mode: String) -> void:
+	_clear_ctx()
+	match mode:
+		"new":
+			ctx_box.add_child(seed_edit)
+			var go := Button.new()
+			go.text = "Create & Host"
+			go.pressed.connect(_on_host_pressed)
+			ctx_box.add_child(go)
+		"worlds":
+			var worlds := _list_worlds()
+			if worlds.is_empty():
+				_ctx_note("No worlds yet — make one with New World.")
+			for w in worlds:
+				var b := Button.new()
+				b.text = "Seed %d  —  Day %d" % [w["seed"], w["day"]]
+				b.pressed.connect(func() -> void:
+					seed_edit.text = str(w["seed"])
+					_on_host_pressed())
+				ctx_box.add_child(b)
+		"join":
+			ctx_box.add_child(ip_edit)
+			var jb := Button.new()
+			jb.text = "Join"
+			jb.pressed.connect(_on_join_pressed)
+			ctx_box.add_child(jb)
+		"added":
+			var servers := _list_servers()
+			if servers.is_empty():
+				_ctx_note("Worlds you join get remembered here.")
+			for ip in servers:
+				var b := Button.new()
+				b.text = ip
+				b.pressed.connect(func() -> void:
+					ip_edit.text = ip
+					_on_join_pressed())
+				ctx_box.add_child(b)
+
+func _ctx_note(t: String) -> void:
+	var l := Label.new()
+	l.text = t
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.modulate = Color(1, 1, 1, 0.4)
+	l.add_theme_font_size_override("font_size", 12)
+	ctx_box.add_child(l)
+
+func _list_worlds() -> Array:
+	var out: Array = []
+	var dir := DirAccess.open("user://saves")
+	if dir == null:
+		return out
+	for f in dir.get_files():
+		if f.begins_with("world_") and f.ends_with(".json"):
+			var entry := {"seed": int(f.trim_prefix("world_").trim_suffix(".json")), "day": 1, "mtime": FileAccess.get_modified_time("user://saves/" + f)}
+			var data: Variant = JSON.parse_string(FileAccess.open("user://saves/" + f, FileAccess.READ).get_as_text())
+			if data is Dictionary:
+				entry["day"] = int(data.get("day", 1))
+			out.append(entry)
+	out.sort_custom(func(a, b): return a["mtime"] > b["mtime"])
+	return out
+
+func _continue_latest() -> void:
+	var worlds := _list_worlds()
+	if worlds.is_empty():
+		return
+	seed_edit.text = str(worlds[0]["seed"])
+	_on_host_pressed()
+
+func _list_servers() -> Array:
+	if not FileAccess.file_exists("user://servers.json"):
+		return []
+	var data: Variant = JSON.parse_string(FileAccess.open("user://servers.json", FileAccess.READ).get_as_text())
+	return data if data is Array else []
+
+func remember_server(ip: String) -> void:
+	var servers := _list_servers()
+	if ip in servers:
+		return
+	servers.append(ip)
+	var f := FileAccess.open("user://servers.json", FileAccess.WRITE)
+	f.store_string(JSON.stringify(servers))
+	f.close()
+
+func return_to_menu() -> void:
+	if world:
+		world.save_now()
+		for p in world.get_node("Players").get_children():
+			p.save_local()
+		world.queue_free()
+		world = null
+	if multiplayer.multiplayer_peer != null:
+		multiplayer.multiplayer_peer.close()
+		multiplayer.multiplayer_peer = null
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	menu.visible = true
+	_set_status("")
 
 func _build_character_panel(parent: Node) -> void:
 	var you := VBoxContainer.new()
@@ -278,7 +403,6 @@ func _build_character_panel(parent: Node) -> void:
 	_opt_row(you, "Skin", "skin", Player.SKIN_TONES.size())
 	_opt_row(you, "Hair color", "hair_color", Player.HAIR_COLORS.size())
 	_opt_row(you, "Hair style", "hair_style", Profile.HAIR_STYLES.size(), Profile.HAIR_STYLES)
-	_opt_row(you, "Shirt", "shirt", Player.SHIRT_COLORS.size())
 	var beard_btn := Button.new()
 	beard_btn.text = "Beard: " + ("yes" if profile.get("beard", false) else "no")
 	beard_btn.pressed.connect(func() -> void:
@@ -422,6 +546,7 @@ func _on_join_pressed() -> void:
 
 func _on_connected_to_server() -> void:
 	_set_status("Connected. Receiving island...")
+	remember_server(ip_edit.text.strip_edges())
 
 func _on_connection_failed() -> void:
 	multiplayer.multiplayer_peer = null

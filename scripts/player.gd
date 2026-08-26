@@ -41,6 +41,7 @@ var _arm_r: Node3D
 var _leg_l: Node3D
 var _leg_r: Node3D
 var _leg_mats: Array[StandardMaterial3D] = []
+var _boots: Array[MeshInstance3D] = []
 var _shirt_color := Color.WHITE
 var _pants_color := Color.WHITE
 var _walk_prev := Vector3.ZERO
@@ -101,10 +102,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		rotation.y -= event.relative.x * 0.0025
 		head.rotation.x = clampf(head.rotation.x - event.relative.y * 0.0025, -1.4, 1.4)
 	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE:
-		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		else:
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if hud:
+			hud.toggle_pause()
 
 func _physics_process(delta: float) -> void:
 	if not is_local():
@@ -272,7 +271,10 @@ func _world() -> World:
 	return n as World
 
 func current_tool() -> String:
-	match SLOTS[selected_slot]:
+	return current_tool_for(SLOTS[selected_slot])
+
+func current_tool_for(slot: String) -> String:
+	match slot:
 		"axe":
 			for t in ["iron_axe", "stone_axe", "crude_axe"]:
 				if owned_tools.has(t): return t
@@ -372,6 +374,7 @@ func apply_appearance(ap: Dictionary) -> void:
 	_hat_mesh = null
 	_pack_mesh = null
 	_hair = null
+	_held = null
 	_build_body()
 	_refresh_gear_visuals()
 	if _tag:
@@ -393,11 +396,13 @@ func _build_body() -> void:
 	var hair_c: Color = HAIR_COLORS[int(appearance.get("hair_color", peer_id * 7 + 3)) % HAIR_COLORS.size()]
 	var hair_style := int(appearance.get("hair_style", 0))   # 0 short, 1 long, 2 bald
 	var has_beard: bool = appearance.get("beard", (peer_id * 13) % 3 == 0)
-	_shirt_color = SHIRT_COLORS[int(appearance.get("shirt", peer_id)) % SHIRT_COLORS.size()]
-	_pants_color = Color.from_hsv(fmod(peer_id * 0.61 + 0.5, 1.0), 0.35, 0.35)
+	# You wash ashore in your underwear. Everything else is crafted.
+	_shirt_color = _skin_color
+	_pants_color = _skin_color
 
-	# torso: waist narrower than shoulders
-	_shirt = _tbox(0.26, 0.15, 0.32, 0.18, 0.64, _shirt_color, Vector3(0, 0.88, 0))
+	# torso: bare skin until you weave something
+	_shirt = _tbox(0.26, 0.15, 0.32, 0.18, 0.64, _skin_color, Vector3(0, 0.88, 0))
+	_box(Vector3(0.52, 0.26, 0.36), Color(0.42, 0.44, 0.48), Vector3(0, 0.90, 0))   # the shorts
 	# head + face
 	_head_box = _box(Vector3(0.44, 0.44, 0.42), _skin_color, Vector3(0, 1.76, 0))
 	var eye_c := Color(0.13, 0.11, 0.09)
@@ -417,8 +422,8 @@ func _build_body() -> void:
 	if has_beard:
 		_box(Vector3(0.32, 0.12, 0.03), hair_c, Vector3(0, 1.57, -0.21))
 	# arms: sleeve tapers to the wrist, skin hands
-	_arm_l = _limb(0.075, 0.075, 0.09, 0.09, 0.52, _shirt_color, Vector3(-0.41, 1.46, 0))
-	_arm_r = _limb(0.075, 0.075, 0.09, 0.09, 0.52, _shirt_color, Vector3(0.41, 1.46, 0))
+	_arm_l = _limb(0.075, 0.075, 0.09, 0.09, 0.52, _skin_color, Vector3(-0.41, 1.46, 0))
+	_arm_r = _limb(0.075, 0.075, 0.09, 0.09, 0.52, _skin_color, Vector3(0.41, 1.46, 0))
 	for arm in [_arm_l, _arm_r]:
 		var hand := MeshInstance3D.new()
 		var hm := BoxMesh.new()
@@ -428,9 +433,10 @@ func _build_body() -> void:
 		hand.position.y = -0.58
 		arm.add_child(hand)
 	# legs: slight taper to the ankle, dark boots
-	_leg_l = _limb(0.095, 0.10, 0.115, 0.12, 0.76, _pants_color, Vector3(-0.14, 0.88, 0))
-	_leg_r = _limb(0.095, 0.10, 0.115, 0.12, 0.76, _pants_color, Vector3(0.14, 0.88, 0))
+	_leg_l = _limb(0.095, 0.10, 0.115, 0.12, 0.76, _skin_color, Vector3(-0.14, 0.88, 0))
+	_leg_r = _limb(0.095, 0.10, 0.115, 0.12, 0.76, _skin_color, Vector3(0.14, 0.88, 0))
 	_leg_mats.clear()
+	_boots.clear()
 	for leg in [_leg_l, _leg_r]:
 		for c in leg.get_children():
 			if c is MeshInstance3D:
@@ -441,7 +447,9 @@ func _build_body() -> void:
 		boot.mesh = bm
 		boot.material_override = _flat(Color(0.20, 0.16, 0.12))
 		boot.position = Vector3(0, -0.82, -0.04)
+		boot.visible = false   # boots come with leg gear
 		leg.add_child(boot)
+		_boots.append(boot)
 
 func _animate_walk(delta: float) -> void:
 	if is_local():
@@ -486,6 +494,8 @@ func _update_viewmodel() -> void:
 	if key == _vm_key:
 		return
 	_vm_key = key
+	if multiplayer.multiplayer_peer != null:
+		rx_tool.rpc(tool)   # others see what you're holding
 	if _viewmodel:
 		_viewmodel.queue_free()
 	_viewmodel = Node3D.new()
@@ -523,16 +533,59 @@ func _update_viewmodel() -> void:
 func _swing_feel(hit_sound: String, hit_pos: Variant) -> void:
 	Sfx.play(self, "whoosh", -10.0)
 	if _viewmodel:
-		_viewmodel.rotation_degrees.x = 0
+		# wind up slightly, then a fast diagonal chop with eased recovery
+		_viewmodel.rotation_degrees = Vector3.ZERO
+		_viewmodel.position = Vector3(0.28, -0.24, -0.5)
 		var tw := create_tween()
-		tw.tween_property(_viewmodel, "rotation_degrees:x", -55.0, 0.07)
-		tw.tween_property(_viewmodel, "rotation_degrees:x", 0.0, 0.2)
+		tw.set_parallel(true)
+		tw.tween_property(_viewmodel, "rotation_degrees:x", 14.0, 0.05).set_ease(Tween.EASE_OUT)
+		tw.chain().tween_property(_viewmodel, "rotation_degrees:x", -72.0, 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.parallel().tween_property(_viewmodel, "rotation_degrees:z", 18.0, 0.08)
+		tw.parallel().tween_property(_viewmodel, "position:y", -0.30, 0.08)
+		tw.chain().tween_property(_viewmodel, "rotation_degrees", Vector3.ZERO, 0.28).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(_viewmodel, "position", Vector3(0.28, -0.24, -0.5), 0.28).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	if hit_sound != "" and hit_pos is Vector3:
 		Sfx.play_at(_world(), hit_pos, hit_sound, -4.0)
 		var tw2 := create_tween()
 		cam.rotation.x = 0.025
 		tw2.tween_property(cam, "rotation:x", 0.0, 0.12)
 	rx_swing_fx.rpc()
+
+var _held: Node3D = null
+
+@rpc("any_peer", "call_remote", "reliable")
+func rx_tool(tool: String) -> void:
+	# Third-person held tool, gripped in the right hand.
+	if multiplayer.get_remote_sender_id() != peer_id or _arm_r == null:
+		return
+	if _held:
+		_held.queue_free()
+		_held = null
+	if tool == "hand":
+		return
+	_held = Node3D.new()
+	_arm_r.add_child(_held)
+	_held.position = Vector3(0, -0.62, 0)
+	_held.rotation_degrees.x = -90   # held forward
+	var wood := Color(0.42, 0.30, 0.17)
+	var head_c: Color = TOOL_MATERIAL_COLORS.get(tool.get_slice("_", 0), Color(0.5, 0.5, 0.5))
+	var part := func(size: Vector3, c: Color, pos: Vector3) -> void:
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = size
+		mi.mesh = bm
+		mi.material_override = _flat(c)
+		mi.position = pos
+		_held.add_child(mi)
+	if tool.ends_with("axe"):
+		part.call(Vector3(0.05, 0.55, 0.05), wood, Vector3(0, 0.18, 0))
+		part.call(Vector3(0.05, 0.13, 0.18), head_c, Vector3(0, 0.42, 0.07))
+	elif tool.ends_with("pick"):
+		part.call(Vector3(0.05, 0.55, 0.05), wood, Vector3(0, 0.18, 0))
+		part.call(Vector3(0.05, 0.06, 0.40), head_c, Vector3(0, 0.42, 0))
+	elif tool.ends_with("spear"):
+		part.call(Vector3(0.045, 0.95, 0.045), wood, Vector3(0, 0.3, 0))
+		part.call(Vector3(0.055, 0.16, 0.055), head_c, Vector3(0, 0.82, 0))
 
 @rpc("any_peer", "call_remote", "unreliable")
 func rx_swing_fx() -> void:
@@ -605,17 +658,19 @@ func _refresh_gear_visuals() -> void:
 	# Since there's no chat, your look IS your name: gear shows on your body.
 	if _shirt == null:
 		return
-	var torso_c := _shirt_color
+	var torso_c := _skin_color   # bare until dressed
 	if equipment.has("torso"):
 		torso_c = GameItems.TIER_COLORS[GameItems.CLOTHES[equipment["torso"]]["tier"]]
 	_shirt.material_override.albedo_color = torso_c
 	for arm in [_arm_l, _arm_r]:
 		arm.get_node("sleeve").material_override.albedo_color = torso_c
-	var legs_c := _pants_color
+	var legs_c := _skin_color
 	if equipment.has("legs"):
 		legs_c = GameItems.TIER_COLORS[GameItems.CLOTHES[equipment["legs"]]["tier"]].darkened(0.25)
 	for lm in _leg_mats:
 		lm.albedo_color = legs_c
+	for boot in _boots:
+		boot.visible = equipment.has("legs")
 	if equipment.has("head") and _hat_mesh == null:
 		# brimmed cap: crown + wider brim, replaces hair
 		_hat_mesh = _box(Vector3(0.40, 0.20, 0.40), Color.WHITE, Vector3(0, 2.08, 0))

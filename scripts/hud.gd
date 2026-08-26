@@ -136,10 +136,11 @@ func _build() -> void:
 	for i in Player.SLOTS.size():
 		var pc := PanelContainer.new()
 		var l := Label.new()
-		l.text = "%d %s" % [i + 1, Player.SLOTS[i]]
+		l.text = "%d %s" % [(i + 1) % 10, Player.SLOTS[i]]
 		l.add_theme_font_size_override("font_size", 13)
 		pc.add_child(l)
 		hotbar.add_child(pc)
+		hotbar_labels.append(l)
 
 	# crafting panel (Tab)
 	craft_panel = PanelContainer.new()
@@ -186,12 +187,69 @@ func _bar(parent: Node, label_text: String, color: Color) -> ColorRect:
 	back.add_child(bar)
 	return bar
 
+var pause_panel: PanelContainer = null
+
+func toggle_pause() -> void:
+	if pause_panel == null:
+		pause_panel = PanelContainer.new()
+		pause_panel.set_anchors_preset(Control.PRESET_CENTER)
+		get_child(0).add_child(pause_panel)
+		var v := VBoxContainer.new()
+		v.custom_minimum_size = Vector2(240, 0)
+		v.add_theme_constant_override("separation", 8)
+		pause_panel.add_child(v)
+		var t := Label.new()
+		t.text = "— PAUSED —\n(the island keeps going)"
+		t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		v.add_child(t)
+		var resume := Button.new()
+		resume.text = "Resume"
+		resume.pressed.connect(toggle_pause)
+		v.add_child(resume)
+		var to_menu := Button.new()
+		to_menu.text = "Save & Quit to Menu"
+		to_menu.pressed.connect(func() -> void:
+			var main: Node = _world().get_parent()
+			pause_panel.visible = false
+			main.return_to_menu())
+		v.add_child(to_menu)
+		var quit := Button.new()
+		quit.text = "Save & Quit Game"
+		quit.pressed.connect(func() -> void:
+			var w: World = _world()
+			w.save_now()
+			for p in w.get_node("Players").get_children():
+				p.save_local()
+			get_tree().quit())
+		v.add_child(quit)
+		pause_panel.visible = false
+	pause_panel.visible = not pause_panel.visible
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if pause_panel.visible else Input.MOUSE_MODE_CAPTURED
+	if craft_panel.visible and pause_panel.visible:
+		craft_panel.visible = false
+
 func toggle_craft() -> void:
 	craft_panel.visible = not craft_panel.visible
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if craft_panel.visible else Input.MOUSE_MODE_CAPTURED
 
 var _dmg_overlay: ColorRect
 var _was_night := false
+var hotbar_labels: Array[Label] = []
+
+func _slot_status(slot: String) -> Array:
+	# [available: bool, extra_text: String] — the hotbar never lies about
+	# what you actually have.
+	match slot:
+		"hand":
+			return [true, ""]
+		"axe", "pick", "spear":
+			return [player.current_tool_for(slot) != "hand", ""]
+		"food":
+			var n: int = player.inv.get("cooked_meat", 0) + player.inv.get("berries", 0) + player.inv.get("raw_meat", 0)
+			return [n > 0, " ×%d" % n if n > 0 else ""]
+		_:
+			var c: int = player.inv.get(slot, 0)
+			return [c > 0, " ×%d" % c if c > 0 else ""]
 
 func damage_flash() -> void:
 	if _dmg_overlay == null:
@@ -213,6 +271,13 @@ func _process(delta: float) -> void:
 		return
 	hp_bar.size.x = 180.0 * clampf(player.hp / 100.0, 0, 1)
 	hunger_bar.size.x = 180.0 * clampf(player.hunger / 100.0, 0, 1)
+
+	for i in hotbar_labels.size():
+		var slot: String = Player.SLOTS[i]
+		var st := _slot_status(slot)
+		hotbar_labels[i].text = "%d %s%s" % [(i + 1) % 10, slot, st[1]]
+		var col := Color(1, 1, 0.5) if i == player.selected_slot else Color(1, 1, 1)
+		hotbar_labels[i].modulate = col if st[0] else Color(col.r, col.g, col.b, 0.32)
 
 	var inv_lines: PackedStringArray = []
 	for item in player.inv:
@@ -252,9 +317,6 @@ func _process(delta: float) -> void:
 		goal_label.text = goals[goals_done][0]
 	else:
 		goal_label.text = "Scale-clad, iron-armed — and the monolith\nburning blue across the water. The islands are yours.\nWhat sleeps beneath the stone… comes next."
-
-	for i in hotbar.get_child_count():
-		hotbar.get_child(i).modulate = Color(1, 1, 0.5) if i == player.selected_slot else Color(1, 1, 1, 0.75)
 
 	if msg_timer > 0.0:
 		msg_timer -= delta

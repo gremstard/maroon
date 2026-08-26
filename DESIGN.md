@@ -234,6 +234,25 @@ crows and wolves; build in the highlands, bears come. Location = loadout.
   (box-rig, server authority from day one, playtime gating, noise/stealth).
   M2 gets its own repo and design doc when it starts. Maroon answers every
   future "what about PvP?" with one word: *M2.*
+  **M2 adopts from SCAVOCK wholesale where it fits**: the combat doc (per-weapon
+  blocking windows, aggressive/defensive/technical triangle, long TTK as the
+  social layer's foundation, probabilistic weight-scaled stagger), noise &
+  stealth, reinforcement/armor damage-pool model, equip layers — then extends
+  the tech ladder past SCAVOCK's no-guns rule: firearms, rocket launchers,
+  helicopters, Rust-style. SCAVOCK's TTK logic gets re-derived for guns.
+
+## Playtest queue (from Riz's first sessions)
+Big systems, in build order, each its own pass:
+1. **Building system** — ghost preview, snapping, foundation/floor/wall/
+   doorway/door/window/stairs/roof, wood→stone→brick, hammer (approved scope,
+   awaiting go).
+2. **Grid inventory** — 4 hotbar slots + Tarkov-style grid (start 2×4, packs
+   expand it), multi-cell rotatable items with icons. Supersedes the earlier
+   "no grid" note — Riz's call after playtesting.
+3. **Cloth & dye chain** — dead grass → string → cloth → berry/flower dyes →
+   colored clothing; crafted shirts/pants as the *only* way to be dressed.
+4. **Environment depth** — broadleaf + birch trees, fallen-leaf litter, twigs,
+   varied rocks, ponds/streams, richer ground cover. Realism is the bar.
 - Maroon stays: PnPvE, 5–8 friends, tech ceiling at iron/scale (never a gun),
   beatable, then peaceful. No raiding of claims. No chat/comms of any kind.
 - No wipes — worlds are meant to be kept.

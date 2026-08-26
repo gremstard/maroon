@@ -1,4 +1,5 @@
 # MAROON
+*by Riz — **Brain Dump Inneractive** (BDIA)*
 
 You're marooned. It's you, your friends, and the wilderness — never each other.
 A PnPvE survival game (Unturned × Rust × Minecraft, minus the toxicity).
