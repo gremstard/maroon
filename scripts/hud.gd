@@ -51,6 +51,9 @@ func setup(p: Player) -> void:
 		["Light the beacon at the island's peak", func(): return player.events.get("beacon_lit", 0) >= 1],
 		["Something circles the wreck.\n  Slay the Leviathan", func(): return player.events.get("kill_leviathan", 0) >= 1],
 		["Forge Scale Armor from the Leviathan's hide", func(): return player.crafted.has("scale_chest")],
+		["The monolith has opened the way.\n  Descend into the Depths", func(): return player.events.get("entered_depths", 0) >= 1],
+		["Mine 3 Heartstone (iron pick, torches up)", func(): return player.total_gathered.get("heartstone", 0) >= 3],
+		["Restore the Heart of the Island", func(): return player.events.get("heart_restored", 0) >= 1],
 		["Survive to Day 3", func(): return _world() != null and _world().day >= 3],
 	]
 	_build()
@@ -654,7 +657,12 @@ func _process(delta: float) -> void:
 		var hh := int(w.time_of_day)
 		var mm := int(fmod(w.time_of_day, 1.0) * 60.0)
 		var wx: String = {"clear": "", "overcast": "  ☁ overcast", "rain": "  🌧 rain", "storm": "  ⛈ STORM", "fog": "  🌫 fog"}.get(w.weather, "")
-		clock_label.text = "Day %d — %02d:%02d%s%s" % [w.day, hh, mm, wx, "   << NIGHT — wolves hunt >>" if w.is_night() else ""]
+		var night_tag := ""
+		if w.is_night():
+			night_tag = "   ☮ peaceful night" if w.peaceful else "   << NIGHT — wolves hunt >>"
+		elif w.peaceful:
+			night_tag = "   ☮"
+		clock_label.text = "Day %d — %02d:%02d%s%s" % [w.day, hh, mm, wx, night_tag]
 
 	if w:
 		var night_now := w.is_night()
@@ -669,7 +677,7 @@ func _process(delta: float) -> void:
 	if goals_done < goals.size():
 		goal_label.text = goals[goals_done][0]
 	else:
-		goal_label.text = "Scale-clad, iron-armed — and the monolith\nburning blue across the water. The islands are yours.\nWhat sleeps beneath the stone… comes next."
+		goal_label.text = "THE HEART BEATS. The wolves grow calm,\nthe rot forgets your walls. Every chain is closed —\nthe island is truly, finally yours. Build.\n(The Long Game — hard mode — comes next.)"
 
 	if msg_timer > 0.0:
 		msg_timer -= delta

@@ -175,6 +175,17 @@ func _ready() -> void:
 			await get_tree().create_timer(0.4).timeout
 			pl._try_fish()
 			await get_tree().create_timer(0.4).timeout
+		if "--shot-depths" in args:
+			world.rx_monolith_awakened()
+			world.sv_place_structure("torch", world.depths_center + Vector3(6, 0, 3), 0.0)
+			pl.global_position = world.depths_center + Vector3(11, 1.2, 5)
+			var to_altar: Vector3 = world.depths_center - pl.global_position
+			pl.rotation.y = atan2(-to_altar.x, -to_altar.z)
+			pl.head.rotation.x = -0.05
+			pl.inv["torch"] = 3
+			pl.set_hotbar(2, "torch")
+			pl.selected_slot = 2
+			await get_tree().create_timer(0.8).timeout
 		if "--shot-stilt" in args:
 			var wdir := Vector3(pl.global_position.x, 0, pl.global_position.z).normalized()
 			var wp := Vector3.ZERO
@@ -871,7 +882,7 @@ func _run_smoke_test() -> void:
 	var dwellers := world.get_node("Animals").get_children().filter(
 		func(a): return a.kind == "dweller")
 	print("[smoke] cave at %.0f,%.0f — dwellers: %d" % [world.cave_pos.x, world.cave_pos.z, dwellers.size()])
-	ok = ok and dwellers.size() == 3
+	ok = ok and dwellers.size() >= 3   # 3 haunt the cave, more keep the Depths
 	p.inv["branch"] = p.inv.get("branch", 0) + 1
 	p.inv["fiber"] = p.inv.get("fiber", 0) + 2
 	p.craft("torch")
@@ -911,6 +922,26 @@ func _run_smoke_test() -> void:
 		world.get_node("Monolith").get_meta("awakened"),
 		p.events.get("monolith_awakened", 0), p.inv.get("iron_bar", 0)])
 	ok = ok and world.get_node("Monolith").get_meta("awakened") and p.events.get("monolith_awakened", 0) == 1
+
+	# the depths: hall exists, heartstone iron-gated mining, heart restored
+	p.global_position = world.depths_center + Vector3(10, 1.2, 0)
+	await get_tree().create_timer(1.2).timeout
+	print("[smoke] entered depths: ", p.events.get("entered_depths", 0))
+	ok = ok and p.events.get("entered_depths", 0) == 1
+	var hearts := world.get_node("Resources").get_children().filter(
+		func(r): return r.get_meta("kind") == "heartstone")
+	ok = ok and hearts.size() == 3
+	world.sv_hit_resource(hearts[0].name, 7.0)
+	await get_tree().create_timer(0.2).timeout
+	ok = ok and p.inv.get("heartstone", 0) > 0
+	p.inv["heartstone"] = 3
+	world.sv_restore_heart()
+	world.sv_restore_heart()   # second restore must do nothing
+	await get_tree().create_timer(0.3).timeout
+	print("[smoke] heart: peaceful=%s event=%d shard=%d" % [world.peaceful, p.events.get("heart_restored", 0), p.inv.get("heart_shard", 0)])
+	ok = ok and world.peaceful and p.events.get("heart_restored", 0) == 1 and p.inv.get("heart_shard", 0) == 1
+	world._on_nightfall()   # peaceful: must not spawn a wave
+	await get_tree().create_timer(0.2).timeout
 
 	# grid inventory: reconcile builds stacks, crafts auto-bind to hotbar
 	p.reconcile_grid()

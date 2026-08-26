@@ -61,6 +61,7 @@ func setup(s: int) -> void:
 	_build_ruins()
 	_build_cave()
 	_build_far_isle()
+	_build_depths()
 
 	if multiplayer.is_server():
 		_load_save()               # restores structures/day/resources if this seed was played before
@@ -418,6 +419,35 @@ func _make_resource(kind: String, idx: int) -> StaticBody3D:
 			iss.radius = 0.85
 			shape.shape = iss
 			shape.position.y = 0.35
+		"heartstone":
+			var hmi := MeshInstance3D.new()
+			var hsm2 := SphereMesh.new()
+			hsm2.radius = 0.7
+			hsm2.height = 1.0
+			hmi.mesh = hsm2
+			hmi.material_override = _flat_mat(Color(0.22, 0.14, 0.14))
+			hmi.position.y = 0.3
+			body.add_child(hmi)
+			var hcry_mat := StandardMaterial3D.new()
+			hcry_mat.albedo_color = Color(0.9, 0.3, 0.25)
+			hcry_mat.emission_enabled = true
+			hcry_mat.emission = Color(1.0, 0.2, 0.12)
+			hcry_mat.emission_energy_multiplier = 1.8
+			for k in 3:
+				var hcry := MeshInstance3D.new()
+				var hcm := CylinderMesh.new()
+				hcm.top_radius = 0.0
+				hcm.bottom_radius = 0.11
+				hcm.height = 0.5
+				hcry.mesh = hcm
+				hcry.material_override = hcry_mat
+				hcry.position = Vector3(k * 0.25 - 0.25, 0.7, fmod(k * 0.3, 0.3) - 0.1)
+				hcry.rotation_degrees.z = k * 18.0 - 18.0
+				body.add_child(hcry)
+			var hss := SphereShape3D.new()
+			hss.radius = 0.8
+			shape.shape = hss
+			shape.position.y = 0.4
 		"moonstone":
 			var mi := MeshInstance3D.new()
 			var sm := SphereMesh.new()
@@ -612,6 +642,12 @@ func _spawn_initial_animals() -> void:
 				animal_counter += 1
 				rx_spawn_animal.rpc("a_%d" % animal_counter, "crow", Vector3(x, height_at(x, z) + 2.5, z))
 				break
+	# the depths are dweller country
+	for i in 4:
+		animal_counter += 1
+		var dang := rng.randf() * TAU
+		var ddp := depths_center + Vector3(cos(dang), 0, sin(dang)) * rng.randf_range(4.0, 12.0)
+		rx_spawn_animal.rpc("a_%d" % animal_counter, "dweller", ddp + Vector3(0, 0.5, 0))
 	# the far isle is predator country
 	var far_kinds := ["bear", "bear", "wolf", "wolf", "wolf", "boar"]
 	for kind in far_kinds:
@@ -2006,6 +2042,197 @@ func rx_monolith_awakened() -> void:
 	mono.add_child(mlight)
 	Sfx.play_at(self, mono.global_position, "chime", 2.0)
 
+# ================================================================ the depths
+
+var depths_center := Vector3.ZERO
+var hatch_pos := Vector3.ZERO
+var peaceful := false
+
+func _depths_slab(holder: Node3D, size: Vector3, pos: Vector3, mat: StandardMaterial3D) -> void:
+	var body := StaticBody3D.new()
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	mi.material_override = mat
+	body.add_child(mi)
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = size
+	cs.shape = bs
+	body.add_child(cs)
+	holder.add_child(body)
+	body.global_position = pos
+
+func _build_depths() -> void:
+	# Chain #3's destination: a great hall 30 m beneath the Far Isle,
+	# reached through the hatch the monolith unseals. Dark, guarded, and
+	# holding the island's heart.
+	depths_center = Vector3(far_center.x, -30.0, far_center.y)
+	var holder := Node3D.new()
+	holder.name = "Depths"
+	add_child(holder)
+	var stone := _flat_mat(Color(0.13, 0.12, 0.14))
+	var vein_mat := StandardMaterial3D.new()
+	vein_mat.albedo_color = Color(0.55, 0.16, 0.15)
+	vein_mat.emission_enabled = true
+	vein_mat.emission = Color(0.7, 0.15, 0.1)
+	vein_mat.emission_energy_multiplier = 0.8
+	var dc := depths_center
+	_depths_slab(holder, Vector3(36, 1, 36), dc + Vector3(0, -0.5, 0), stone)
+	_depths_slab(holder, Vector3(36, 1, 36), dc + Vector3(0, 8.0, 0), stone)
+	_depths_slab(holder, Vector3(1, 8, 36), dc + Vector3(17.5, 4, 0), stone)
+	_depths_slab(holder, Vector3(1, 8, 36), dc + Vector3(-17.5, 4, 0), stone)
+	_depths_slab(holder, Vector3(36, 8, 1), dc + Vector3(0, 4, 17.5), stone)
+	_depths_slab(holder, Vector3(36, 8, 1), dc + Vector3(0, 4, -17.5), stone)
+	var prng := RandomNumberGenerator.new()
+	prng.seed = wseed + 66
+	for i in 6:
+		var pp := dc + Vector3(prng.randf_range(-13, 13), 4, prng.randf_range(-13, 13))
+		if pp.distance_to(dc + Vector3(0, 4, 0)) < 5.0:
+			continue
+		_depths_slab(holder, Vector3(1.4, 8, 1.4), pp, stone)
+	for i in 10:
+		# glowing veins in the walls — the heart's pulse, spread thin
+		var vein := MeshInstance3D.new()
+		var vm := BoxMesh.new()
+		vm.size = Vector3(prng.randf_range(0.5, 2.5), 0.12, 0.06)
+		vein.mesh = vm
+		vein.material_override = vein_mat
+		holder.add_child(vein)
+		var side := i % 4
+		var along := prng.randf_range(-15, 15)
+		var vy := prng.randf_range(1.0, 6.5)
+		match side:
+			0: vein.global_position = dc + Vector3(17.0, vy, along)
+			1: vein.global_position = dc + Vector3(-17.0, vy, along)
+			2:
+				vein.global_position = dc + Vector3(along, vy, 17.0)
+				vein.rotation.y = PI / 2
+			3:
+				vein.global_position = dc + Vector3(along, vy, -17.0)
+				vein.rotation.y = PI / 2
+
+	# heartstone veins — the last ore, and it only yields to iron
+	var res_holder := get_node("Resources")
+	for i in 3:
+		var ang := prng.randf() * TAU
+		var res := _make_resource("heartstone", 11000 + i)
+		res_holder.add_child(res)
+		res.global_position = dc + Vector3(cos(ang) * prng.randf_range(6, 13), 0, sin(ang) * prng.randf_range(6, 13))
+		res.rotation.y = prng.randf() * TAU
+
+	# the Heart altar
+	var altar := StaticBody3D.new()
+	altar.name = "HeartAltar"
+	altar.set_meta("heart_altar", true)
+	var amesh := MeshInstance3D.new()
+	var acm := CylinderMesh.new()
+	acm.top_radius = 1.0
+	acm.bottom_radius = 1.3
+	acm.height = 1.1
+	amesh.mesh = acm
+	amesh.material_override = _flat_mat(Color(0.20, 0.18, 0.20))
+	amesh.position.y = 0.55
+	altar.add_child(amesh)
+	var heart := MeshInstance3D.new()
+	var hsm := SphereMesh.new()
+	hsm.radius = 0.5
+	hsm.height = 1.0
+	heart.mesh = hsm
+	heart.name = "HeartOrb"
+	var dead_mat := StandardMaterial3D.new()
+	dead_mat.albedo_color = Color(0.25, 0.12, 0.12)
+	heart.material_override = dead_mat
+	heart.position.y = 1.6
+	altar.add_child(heart)
+	var acs := CollisionShape3D.new()
+	var acyl := CylinderShape3D.new()
+	acyl.radius = 1.3
+	acyl.height = 2.2
+	acs.shape = acyl
+	acs.position.y = 1.1
+	altar.add_child(acs)
+	holder.add_child(altar)
+	altar.global_position = dc
+
+	# the exit stone inside...
+	var exit_b := StaticBody3D.new()
+	exit_b.name = "DepthsExit"
+	exit_b.set_meta("depths_exit", true)
+	var emesh := MeshInstance3D.new()
+	var ebm := BoxMesh.new()
+	ebm.size = Vector3(1.6, 2.4, 0.6)
+	emesh.mesh = ebm
+	emesh.material_override = _flat_mat(Color(0.28, 0.26, 0.30))
+	emesh.position.y = 1.2
+	exit_b.add_child(emesh)
+	var ecs := CollisionShape3D.new()
+	var ebs := BoxShape3D.new()
+	ebs.size = Vector3(1.6, 2.4, 0.6)
+	ecs.shape = ebs
+	ecs.position.y = 1.2
+	exit_b.add_child(ecs)
+	holder.add_child(exit_b)
+	exit_b.global_position = dc + Vector3(14, 0, 0)
+
+	# ...and the hatch on the surface, beside the monolith, sealed until it wakes
+	hatch_pos = Vector3(far_center.x + 5.0, height_at(far_center.x + 5.0, far_center.y + 3.0), far_center.y + 3.0)
+	var hatch := StaticBody3D.new()
+	hatch.name = "DepthsHatch"
+	hatch.set_meta("depths_hatch", true)
+	var hmesh := MeshInstance3D.new()
+	var hbm := BoxMesh.new()
+	hbm.size = Vector3(2.4, 0.5, 2.4)
+	hmesh.mesh = hbm
+	hmesh.name = "HatchLid"
+	hmesh.material_override = _flat_mat(Color(0.16, 0.15, 0.18))
+	hmesh.position.y = 0.25
+	hatch.add_child(hmesh)
+	var hcs := CollisionShape3D.new()
+	var hbs := BoxShape3D.new()
+	hbs.size = Vector3(2.4, 0.5, 2.4)
+	hcs.shape = hbs
+	hcs.position.y = 0.25
+	hatch.add_child(hcs)
+	holder.add_child(hatch)
+	hatch.global_position = hatch_pos
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_restore_heart() -> void:
+	if not multiplayer.is_server() or peaceful:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender == 0:
+		sender = 1
+	rx_heart_restored.rpc()
+	_grant_items(sender, {"heart_shard": 1})
+	for p in get_node("Players").get_children():
+		p.rx_event.rpc_id(p.peer_id, "heart_restored")
+	save_now()
+
+@rpc("authority", "call_local", "reliable")
+func rx_heart_restored() -> void:
+	peaceful = true
+	var altar_node := get_node("Depths/HeartAltar")
+	if altar_node.has_meta("lit"):
+		return
+	altar_node.set_meta("lit", true)
+	var orb: MeshInstance3D = get_node("Depths/HeartAltar/HeartOrb")
+	var live := StandardMaterial3D.new()
+	live.albedo_color = Color(0.9, 0.3, 0.25)
+	live.emission_enabled = true
+	live.emission = Color(1.0, 0.25, 0.15)
+	live.emission_energy_multiplier = 3.0
+	orb.material_override = live
+	var hl := OmniLight3D.new()
+	hl.light_color = Color(1.0, 0.4, 0.3)
+	hl.omni_range = 20.0
+	hl.light_energy = 2.0
+	hl.position.y = 1.8
+	get_node("Depths/HeartAltar").add_child(hl)
+	Sfx.play_at(self, get_node("Depths/HeartAltar").global_position, "chime", 4.0)
+
 # ================================================================ persistence
 
 var _save_accum := 0.0
@@ -2044,6 +2271,7 @@ func save_now() -> void:
 		"chest_opened": get_node("Ruins/ruins_chest").get_meta("opened"),
 		"lev_dead": leviathan_dead,
 		"monolith": get_node("Monolith").get_meta("awakened"),
+		"peaceful": peaceful,
 	}
 	var f := FileAccess.open(_save_file(), FileAccess.WRITE)
 	f.store_string(JSON.stringify(data))
@@ -2080,6 +2308,8 @@ func _load_save() -> bool:
 		rx_chest_opened()
 	if data.get("monolith", false):
 		rx_monolith_awakened()
+	if data.get("peaceful", false):
+		rx_heart_restored()
 	leviathan_dead = data.get("lev_dead", false)
 	if not leviathan_dead:
 		for e in data.get("structs", []):
@@ -2122,6 +2352,8 @@ func _process(delta: float) -> void:
 	_apply_time_of_day()
 
 func _on_nightfall() -> void:
+	if peaceful:
+		return   # the heart beats; the island has made its peace
 	# The island pushes back: more wolves each night.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = wseed + day * 131
@@ -2150,6 +2382,8 @@ func _apply_time_of_day() -> void:
 	sun.light_color = Color(1.0, lerpf(0.55, 0.95, clampf(elevation, 0, 1)), lerpf(0.35, 0.9, clampf(elevation, 0, 1)))
 
 func _decay_tick(delta: float) -> void:
+	if peaceful:
+		return   # rot loses interest too
 	_decay_accum += delta
 	_totem_feed_accum += delta
 	if _totem_feed_accum >= 60.0:
@@ -2214,6 +2448,8 @@ func sync_to(peer: int) -> void:
 		rx_chest_opened.rpc_id(peer)
 	if get_node("Monolith").get_meta("awakened"):
 		rx_monolith_awakened.rpc_id(peer)
+	if peaceful:
+		rx_heart_restored.rpc_id(peer)
 	if has_node("Lev") and not get_node("Lev").dying:
 		rx_spawn_leviathan.rpc_id(peer, get_node("Lev").anchor)
 	if weather != "clear":

@@ -138,6 +138,8 @@ const DESCRIPTIONS := {
 	"raw_fish": "Cook it. The sea forgives nothing raw.",
 	"cooked_fish": "Flaky, hot, honest food.",
 	"moonfin": "It glows faintly, like the stone the reef hides. Eat it and feel new.",
+	"heartstone": "Warm to the touch, even down there. The island's blood, gone hard.",
+	"heart_shard": "A splinter of the restored Heart. Proof you finished what the captain started.",
 	"totem": "Claims this ground. Feed it wood or the rot returns.",
 	"forge": "Ore goes in. Iron comes out. Stand close to work it.",
 	"beacon": "Needs the peak. Calls across the sea.",
@@ -219,6 +221,7 @@ const NICE_NAMES := {
 	"cabinet": "Cabinet", "furnace": "Furnace",
 	"fishing_rod": "Fishing Rod", "raw_fish": "Raw Fish",
 	"cooked_fish": "Cooked Fish", "moonfin": "Moonfin",
+	"heartstone": "Heartstone", "heart_shard": "Heart Shard",
 	"foundation": "Foundation", "floor": "Floor",
 	"half_wall": "Half Wall", "doorway": "Doorway", "window": "Window Wall",
 	"gable": "Gable", "roof": "Roof", "slope": "Sloped Roof",
@@ -255,6 +258,7 @@ const RES_STATS := {
 	"rock":   {"hp": 15.0, "item": "stone"},
 	"iron":   {"hp": 20.0, "item": "iron_ore"},
 	"moonstone": {"hp": 25.0, "item": "moonstone"},
+	"heartstone": {"hp": 30.0, "item": "heartstone"},
 	"bush":   {"hp": 3.0,  "item": "berries", "pickup": true, "count": 2},
 	"branch": {"hp": 1.0,  "item": "branch",  "pickup": true, "count": 1},
 	"grass":  {"hp": 1.0,  "item": "fiber",   "pickup": true, "count": 2},
@@ -281,7 +285,7 @@ const STACK_MAX := {
 	"furnace": 2, "workbench": 2,
 	"cloth": 20, "red_dye": 10, "yellow_dye": 10, "black_dye": 10,
 	"lamp": 2, "painting": 3,
-	"raw_fish": 10, "cooked_fish": 10, "moonfin": 5,
+	"raw_fish": 10, "cooked_fish": 10, "moonfin": 5, "heartstone": 5,
 }
 
 static func stack_max(item: String) -> int:
@@ -306,7 +310,8 @@ const CATEGORY_COLORS := {
 	"totem": Color(0.55, 0.40, 0.45), "forge": Color(0.40, 0.40, 0.42),
 	"beacon": Color(0.65, 0.55, 0.30),
 	"raw_fish": Color(0.45, 0.55, 0.60), "cooked_fish": Color(0.60, 0.48, 0.30),
-	"moonfin": Color(0.55, 0.70, 0.90),
+	"moonfin": Color(0.55, 0.70, 0.90), "heartstone": Color(0.70, 0.25, 0.22),
+	"heart_shard": Color(0.85, 0.35, 0.30),
 	"charcoal": Color(0.20, 0.20, 0.22), "crate": Color(0.52, 0.40, 0.24),
 	"chest": Color(0.45, 0.32, 0.16), "drawers": Color(0.50, 0.36, 0.20),
 	"cabinet": Color(0.42, 0.30, 0.18), "furnace": Color(0.38, 0.38, 0.40),

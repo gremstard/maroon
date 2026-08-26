@@ -205,6 +205,12 @@ func server_ai(delta: float, world: World) -> void:
 			_ai_snake(delta, world)
 		"crow":
 			_ai_crow(delta, world)
+	if global_position.y < -15.0:
+		# down in the Depths: the hall floor is the ground, its walls the world
+		global_position.y = world.depths_center.y + 0.1
+		global_position.x = clampf(global_position.x, world.depths_center.x - 16.0, world.depths_center.x + 16.0)
+		global_position.z = clampf(global_position.z, world.depths_center.z - 16.0, world.depths_center.z + 16.0)
+		return
 	var ground := world.height_at(global_position.x, global_position.z)
 	if kind == "crow":
 		global_position.y = ground + 2.6 + sin(Time.get_ticks_msec() * 0.003) * 0.35

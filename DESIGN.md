@@ -364,6 +364,19 @@ Big systems, in build order, each its own pass:
   accidental friendly fire inside them.
 - No wipes — worlds are meant to be kept.
 
+## v0.18 status (this repo)
+Added in 0.18 — **Chain #3: the Depths**: the awakened monolith unseals a
+hatch beside it; stepping through descends into a great hall 30 m beneath the
+Far Isle — dark, pillar-lined, its walls veined with a faint red glow, and
+guarded by dwellers (torches still the only safety). Holds the island's last
+ore, **Heartstone** (yields only to iron), and at the center the **Heart of
+the Island** — dead dark stone. Feed it 3 heartstones and it wakes: **the
+island goes peaceful** — nightly wolf waves stop, structure rot stops, the
+clock shows ☮, the restorer keeps a Heart Shard, and every survivor gets the
+ending text. Permanent, persisted, synced. 34-goal ladder now runs the full
+arc: wash ashore → beat the island → keep it. (The Long Game will later make
+"beat" much harder — this is peaceful mode's front door.)
+
 ## v0.17 status (this repo)
 Added in 0.17 — **Building v2** + presence polish: **pillar foundations**
 (deck on four logs sunk to whatever ground each corner finds — aim height

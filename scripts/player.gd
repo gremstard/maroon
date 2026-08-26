@@ -479,7 +479,12 @@ func _survival_tick(delta: float) -> void:
 		Sfx.play(self, "howl", -10.0)
 		if hud:
 			hud.flash("The Sea Cave. Something skitters in the dark —\nkeep a torch burning.")
-	if events.get("entered_far_isle", 0) == 0 and _world() != null:
+	if events.get("entered_depths", 0) == 0 and global_position.y < -20.0 and _world() != null:
+		events["entered_depths"] = 1
+		Sfx.play(self, "roar", -14.0)
+		if hud:
+			hud.flash("The Depths. The island's veins glow in the walls —\nand its dead heart waits at the center.")
+	if events.get("entered_far_isle", 0) == 0 and global_position.y > 0.0 and _world() != null:
 		var fc: Vector2 = _world().far_center
 		if fc != Vector2.ZERO and Vector2(global_position.x - fc.x, global_position.z - fc.y).length() < _world().FAR_R * 0.8 \
 				and _world().height_at(global_position.x, global_position.z) > 0.5:
@@ -1404,6 +1409,10 @@ func _gather(col: Node) -> String:
 			if hud:
 				hud.flash("The ore shrugs off your crude pick. Craft a Stone Pick.")
 			return ""
+		if kind == "heartstone" and power < 6.0:
+			if hud:
+				hud.flash("Heartstone only yields to iron.")
+			return ""
 	if not can_fit(rstats["item"]):
 		if hud:
 			hud.flash("Your pack is full. Drop something, spend something, or get a bigger pack.")
@@ -1476,6 +1485,33 @@ func _interact() -> void:
 		return
 	if col is Node and col.has_meta("crate"):
 		_world().sv_loot_crate.rpc_id(1, String(col.name))
+		return
+	if col is Node and col.has_meta("depths_hatch"):
+		if _world().get_node("Monolith").get_meta("awakened"):
+			global_position = _world().depths_center + Vector3(14, 1.2, 2)
+			Sfx.play(self, "place", -4.0)
+			if hud:
+				hud.flash("Down. The air is warm, and something glows red in the dark.")
+		elif hud:
+			hud.flash("A sealed stone slab. It won't move while the monolith sleeps.")
+		return
+	if col is Node and col.has_meta("depths_exit"):
+		global_position = _world().hatch_pos + Vector3(2, 1.2, 0)
+		Sfx.play(self, "place", -4.0)
+		if hud:
+			hud.flash("Up, into daylight.")
+		return
+	if col is Node and col.has_meta("heart_altar"):
+		if _world().peaceful:
+			if hud:
+				hud.flash("The Heart beats, slow and sure. The island is at peace.")
+		elif inv.get("heartstone", 0) >= 3:
+			inv["heartstone"] -= 3
+			_world().sv_restore_heart.rpc_id(1)
+			if hud:
+				hud.flash("The heartstones sink into the altar…")
+		elif hud:
+			hud.flash("A dead heart of dark stone. It wants three heartstones.")
 		return
 	if col is Node and col.has_meta("monolith"):
 		if col.get_meta("awakened"):
