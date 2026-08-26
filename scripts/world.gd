@@ -856,6 +856,30 @@ func rx_place_structure(sname: String, kind: String, pos: Vector3, yaw: float) -
 			tcs.height = 1.2
 			shape.shape = tcs
 			shape.position.y = 0.6
+		"pack":
+			body.set_meta("hp", 120.0)
+			body.set_meta("store", {})
+			var sack := MeshInstance3D.new()
+			var skm := SphereMesh.new()
+			skm.radius = 0.5
+			skm.height = 0.8
+			sack.mesh = skm
+			sack.material_override = _flat_mat(Color(0.45, 0.34, 0.20))
+			sack.position.y = 0.35
+			body.add_child(sack)
+			var tie := MeshInstance3D.new()
+			var tm2 := CylinderMesh.new()
+			tm2.top_radius = 0.09
+			tm2.bottom_radius = 0.13
+			tm2.height = 0.25
+			tie.mesh = tm2
+			tie.material_override = _flat_mat(Color(0.30, 0.22, 0.13))
+			tie.position.y = 0.75
+			body.add_child(tie)
+			var pks := SphereShape3D.new()
+			pks.radius = 0.6
+			shape.shape = pks
+			shape.position.y = 0.4
 		"crate", "chest", "drawers", "cabinet":
 			body.set_meta("hp", 150.0)
 			body.set_meta("store", {})
@@ -1836,12 +1860,115 @@ func sv_container_take(sname: String, item: String) -> void:
 		store.erase(item)
 	rx_container_store.rpc(sname, store)
 	_grant_items(sender, {item: count})
+	if s.get_meta("kind") == "pack" and store.is_empty():
+		rx_remove_structure.rpc(sname)   # emptied grave-sacks vanish
 
 @rpc("authority", "call_local", "reliable")
 func rx_container_store(sname: String, store: Dictionary) -> void:
 	var holder := get_node("Structures")
 	if holder.has_node(sname):
 		holder.get_node(sname).set_meta("store", store)
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_drop_pack(pos: Vector3, items: Dictionary) -> void:
+	# Death drops your everything, right where you fell. Come and get it —
+	# or let someone kinder carry it home for you.
+	if not multiplayer.is_server() or items.is_empty():
+		return
+	struct_counter += 1
+	var sname := "st_%d" % struct_counter
+	rx_place_structure.rpc(sname, "pack", pos, 0.0)
+	var clean := {}
+	for k in items:
+		if int(items[k]) > 0:
+			clean[String(k)] = int(items[k])
+	rx_container_store.rpc(sname, clean)
+
+# ---------------------------------------------------------------- locks & household
+
+var household: Array = []   # profile names sharing ownership, claim, and keys
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_join_household(pname: String) -> void:
+	if not multiplayer.is_server() or pname == "" or pname in household:
+		return
+	var hh := household.duplicate()
+	hh.append(pname)
+	rx_household.rpc(hh)
+
+@rpc("authority", "call_local", "reliable")
+func rx_household(hh: Array) -> void:
+	household = hh
+	if _local_hud():
+		_local_hud().flash("The household now: %s" % ", ".join(PackedStringArray(hh)))
+
+func lock_allows(s: Node, pname: String) -> bool:
+	if not s.get_meta("locked", false):
+		return true
+	var owner_name := String(s.get_meta("lock_owner", ""))
+	if pname == owner_name:
+		return true
+	return pname in household and owner_name in household
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_attach_lock(sname: String, owner_name: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	if s.get_meta("kind") not in GameItems.LOCKABLE or s.get_meta("locked", false):
+		return
+	rx_lock.rpc(sname, owner_name, 200.0)
+
+@rpc("authority", "call_local", "reliable")
+func rx_lock(sname: String, owner_name: String, lhp: float) -> void:
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	s.set_meta("locked", lhp > 0.0)
+	s.set_meta("lock_owner", owner_name)
+	s.set_meta("lock_hp", lhp)
+	if lhp > 0.0 and not s.has_node("LockBox"):
+		var lb := MeshInstance3D.new()
+		lb.name = "LockBox"
+		var lbm := BoxMesh.new()
+		lbm.size = Vector3(0.16, 0.22, 0.1)
+		lb.mesh = lbm
+		lb.material_override = _flat_mat(Color(0.72, 0.60, 0.28))
+		lb.position = Vector3(0.85, 1.0, -0.1) if s.get_meta("kind") == "door" else Vector3(0, 0.75, -0.35)
+		s.add_child(lb)
+	elif lhp <= 0.0 and s.has_node("LockBox"):
+		s.get_node("LockBox").queue_free()
+		Sfx.play_at(self, s.global_position, "mine", 2.0)
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_bash_lock(sname: String, dmg: float) -> void:
+	if not multiplayer.is_server():
+		return
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	if not s.get_meta("locked", false):
+		return
+	var lhp: float = s.get_meta("lock_hp", 200.0) - clampf(dmg, 0.0, 30.0) * 0.5
+	rx_lock.rpc(sname, String(s.get_meta("lock_owner")), maxf(lhp, 0.0))
+	rx_bash_noise.rpc(s.global_position)
+
+@rpc("authority", "call_local", "reliable")
+func rx_bash_noise(pos: Vector3) -> void:
+	# Brute force is ALWAYS loud. Half the island hears it.
+	var p := AudioStreamPlayer3D.new()
+	p.stream = Sfx.stream("thud")
+	p.volume_db = 8.0
+	p.max_distance = 120.0
+	add_child(p)
+	p.global_position = pos
+	p.finished.connect(p.queue_free)
+	p.play()
 
 @rpc("any_peer", "call_local", "reliable")
 func sv_make_charcoal() -> void:
@@ -2460,6 +2587,8 @@ func save_now() -> void:
 			e["stock"] = int(s.get_meta("stock"))
 		if s.get_meta("kind") in GameItems.CONTAINERS:
 			e["store"] = s.get_meta("store")
+		if s.get_meta("locked", false):
+			e["lock"] = {"owner": s.get_meta("lock_owner"), "hp": s.get_meta("lock_hp")}
 		structs.append(e)
 	var res := {}
 	for r in get_node("Resources").get_children():
@@ -2479,6 +2608,7 @@ func save_now() -> void:
 		"peaceful": peaceful,
 		"game_mode": game_mode, "hard_nights": hard_nights,
 		"hardcore_rounds": hardcore_rounds, "sealed": sealed,
+		"household": household,
 	}
 	var f := FileAccess.open(_save_file(), FileAccess.WRITE)
 	f.store_string(JSON.stringify(data))
@@ -2507,6 +2637,8 @@ func _load_save() -> bool:
 			for k in st:
 				clean[String(k)] = int(st[k])
 			rx_container_store(e["name"], clean)
+		if e.has("lock"):
+			rx_lock(e["name"], String(e["lock"]["owner"]), float(e["lock"]["hp"]))
 	for rname in data.get("res", {}):
 		rx_resource_hp(rname, float(data["res"][rname]))
 	for cname in data.get("looted", []):
@@ -2518,6 +2650,8 @@ func _load_save() -> bool:
 	if data.get("peaceful", false):
 		rx_heart_restored()
 	sealed = data.get("sealed", false)
+	for hn2 in data.get("household", []):
+		household.append(String(hn2))
 	var gm := String(data.get("game_mode", "story"))
 	if gm != "story":
 		rx_mode(gm, int(data.get("hard_nights", 0)), int(data.get("hardcore_rounds", 0)))
@@ -2655,6 +2789,8 @@ func sync_to(peer: int) -> void:
 			rx_totem_stock.rpc_id(peer, s.name, int(s.get_meta("stock")))
 		if s.get_meta("kind") in GameItems.CONTAINERS:
 			rx_container_store.rpc_id(peer, String(s.name), s.get_meta("store"))
+		if s.get_meta("locked", false):
+			rx_lock.rpc_id(peer, String(s.name), String(s.get_meta("lock_owner")), float(s.get_meta("lock_hp")))
 	for r in get_node("Resources").get_children():
 		var hp: float = r.get_meta("hp")
 		if hp < GameItems.RES_STATS[r.get_meta("kind")]["hp"]:
@@ -2672,6 +2808,8 @@ func sync_to(peer: int) -> void:
 		rx_mode.rpc_id(peer, game_mode, hard_nights, hardcore_rounds)
 	if sealed:
 		rx_sealed.rpc_id(peer)
+	if not household.is_empty():
+		rx_household.rpc_id(peer, household)
 	if has_node("Lev") and not get_node("Lev").dying:
 		rx_spawn_leviathan.rpc_id(peer, get_node("Lev").anchor)
 	if weather != "clear":

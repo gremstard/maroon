@@ -54,6 +54,10 @@ const RECIPES := {
 	"scale_chest": {"leviathan_scale": 3, "hide": 2},
 	"raft":       {"wood": 20, "string": 4, "moonstone": 1},
 	"hammer":     {"wood": 4, "stone": 2, "string": 1},
+	# lock & key are born as a pair, forever bound to their maker
+	"lock_and_key": {"iron_bar": 2, "string": 1},
+	"key_copy":   {"iron_bar": 1},   # needs a lock or key in hand to copy from
+	"lock_copy":  {"iron_bar": 2, "string": 1},   # needs a key to match
 }
 
 # Building pieces are placed straight from raw wood (Rust-style), not crafted.
@@ -83,7 +87,9 @@ const PLACEABLES := ["torch", "campfire", "workbench", "crate", "chest",
 	"lamp", "painting"]
 
 # Storage: rows of a 4-wide grid; a container holds that many stacks.
-const CONTAINERS := {"crate": 2, "chest": 3, "drawers": 3, "cabinet": 4}
+# "pack" is the dropped-on-death bundle — never crafted, always lootable.
+const CONTAINERS := {"crate": 2, "chest": 3, "drawers": 3, "cabinet": 4, "pack": 5}
+const LOCKABLE := ["door", "trapdoor", "crate", "chest", "drawers", "cabinet"]
 const MATERIALS := ["string", "iron_bar", "cloth", "red_dye", "yellow_dye", "black_dye"]
 
 # What you can make with cold hands and a flat rock. Everything else needs
@@ -140,6 +146,9 @@ const DESCRIPTIONS := {
 	"moonfin": "It glows faintly, like the stone the reef hides. Eat it and feel new.",
 	"heartstone": "Warm to the touch, even down there. The island's blood, gone hard.",
 	"heart_shard": "A splinter of the restored Heart. Proof you finished what the captain started.",
+	"lock": "Mount it on a door or storage (E). Opens for its maker's key — and their household.",
+	"key": "Cold iron. Lose it and hope you kept a spare lock to copy from.",
+	"pack": "Someone died here. Their everything, in a sack.",
 	"totem": "Claims this ground. Feed it wood or the rot returns.",
 	"forge": "Ore goes in. Iron comes out. Stand close to work it.",
 	"beacon": "Needs the peak. Calls across the sea.",
@@ -222,6 +231,9 @@ const NICE_NAMES := {
 	"fishing_rod": "Fishing Rod", "raw_fish": "Raw Fish",
 	"cooked_fish": "Cooked Fish", "moonfin": "Moonfin",
 	"heartstone": "Heartstone", "heart_shard": "Heart Shard",
+	"lock": "Lock", "key": "Key", "lock_and_key": "Lock & Key",
+	"key_copy": "Duplicate Key", "lock_copy": "Matching Lock",
+	"pack": "Dropped Pack",
 	"foundation": "Foundation", "floor": "Floor",
 	"half_wall": "Half Wall", "doorway": "Doorway", "window": "Window Wall",
 	"gable": "Gable", "roof": "Roof", "slope": "Sloped Roof",
@@ -286,6 +298,7 @@ const STACK_MAX := {
 	"cloth": 20, "red_dye": 10, "yellow_dye": 10, "black_dye": 10,
 	"lamp": 2, "painting": 3,
 	"raw_fish": 10, "cooked_fish": 10, "moonfin": 5, "heartstone": 5,
+	"lock": 5, "key": 5,
 }
 
 static func stack_max(item: String) -> int:
@@ -312,6 +325,7 @@ const CATEGORY_COLORS := {
 	"raw_fish": Color(0.45, 0.55, 0.60), "cooked_fish": Color(0.60, 0.48, 0.30),
 	"moonfin": Color(0.55, 0.70, 0.90), "heartstone": Color(0.70, 0.25, 0.22),
 	"heart_shard": Color(0.85, 0.35, 0.30),
+	"lock": Color(0.72, 0.60, 0.28), "key": Color(0.78, 0.68, 0.35),
 	"charcoal": Color(0.20, 0.20, 0.22), "crate": Color(0.52, 0.40, 0.24),
 	"chest": Color(0.45, 0.32, 0.16), "drawers": Color(0.50, 0.36, 0.20),
 	"cabinet": Color(0.42, 0.30, 0.18), "furnace": Color(0.38, 0.38, 0.40),

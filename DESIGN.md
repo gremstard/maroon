@@ -364,6 +364,19 @@ Big systems, in build order, each its own pass:
   accidental friendly fire inside them.
 - No wipes — worlds are meant to be kept.
 
+## v0.20 status (this repo)
+Added in 0.20 — **death, locks & the household**: **dying drops everything you
+carried** into a lootable pack right where you fell (corpse-run to reclaim it;
+emptied packs vanish, unclaimed ones rot with the world) — worn gear and
+learned tools stay yours. **Locks & keys** per mrrzone's spec: one workbench
+recipe forges the pair, bound to their maker; mount a lock (hold it, E) on
+doors, trapdoors, or storage; opening needs a key *on you* plus the right
+name. Copies: a key or lock in hand lets you craft its twin. **Brute force
+always works** — bashing a lock is slow, and the blow is heard 120 m across
+the island. **The household**: plant a totem and you're family; others swear
+in with E at the totem (double-press). Household members share every lock,
+the claim, and each other's works. All persisted + synced. App icon rounded.
+
 ## v0.19 status (this repo)
 Added in 0.19 — **THE LONG GAME**: feed the totem a moonstone at night (double-
 press E) and it darkens — **HARD mode**: nightly raider waves per totem,

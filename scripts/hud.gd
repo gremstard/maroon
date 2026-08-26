@@ -387,7 +387,7 @@ func _open_context(idx: int, at: Vector2) -> void:
 			close.call()
 			_refresh_pack())
 		v.add_child(wear)
-	if item in GameItems.PLACEABLES or GameItems.hotbar_eligible(item):
+	if item in GameItems.PLACEABLES or GameItems.hotbar_eligible(item) or item == "lock":
 		var hold := Button.new()
 		hold.text = "Hold"
 		hold.pressed.connect(func() -> void:

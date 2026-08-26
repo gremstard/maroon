@@ -454,9 +454,23 @@ func _update_raft_visual() -> void:
 
 var _torch_light: OmniLight3D = null
 var _arm_confirm := 0.0
+var _join_confirm := 0.0
+
+func _lock_pass(col: Node) -> bool:
+	var w := _world()
+	if not w.lock_allows(col, display_name()):
+		if hud:
+			hud.flash("Locked by %s. You could always start hitting it —\nbut half the island will hear." % String(col.get_meta("lock_owner", "someone")))
+		return false
+	if inv.get("key", 0) <= 0:
+		if hud:
+			hud.flash("Your lock — but the key isn't on you.")
+		return false
+	return true
 
 func _survival_tick(delta: float) -> void:
 	_arm_confirm = maxf(_arm_confirm - delta, 0.0)
+	_join_confirm = maxf(_join_confirm - delta, 0.0)
 	reconcile_grid()
 	# a held torch pushes back the night (and the dwellers)
 	var torch_out: bool = held_item() == "torch" and inv.get("torch", 0) > 0
@@ -523,6 +537,18 @@ func _respawn() -> void:
 			hud.show_sealed()
 		set_physics_process(false)
 		return
+	# death drops your everything, right where you fell
+	var dropped := {}
+	for k in inv:
+		if inv[k] > 0:
+			dropped[k] = inv[k]
+	if w and not dropped.is_empty():
+		w.sv_drop_pack.rpc_id(1, global_position + Vector3(0, 0.2, 0), dropped)
+		inv = {"wood": 0, "stone": 0}
+		grid_stacks.clear()
+		temp_held = ""
+		if hud:
+			hud.flash("Everything you carried stays where you fell.\nIt's in a pack now. Go get it — or grieve it.")
 	hp = 100.0
 	hunger = 60.0
 	if w:
@@ -1388,6 +1414,12 @@ func _swing() -> void:
 		var snd := _gather(col)
 		_swing_feel(snd, hit["position"])
 		return
+	if col is Node and col.has_meta("struct") and col.get_meta("locked", false):
+		# brute force: slow, and VERY loud
+		var stats2: Dictionary = GameItems.TOOL_STATS[current_tool()]
+		w.sv_bash_lock.rpc_id(1, String(col.name), stats2["dmg"])
+		_swing_feel("mine", hit["position"])
+		return
 	_swing_feel("", null)
 
 # Returns the impact sound for a successful gather, or "" if the tool refused.
@@ -1459,6 +1491,8 @@ func _place(kind: String) -> void:
 			hud.flash("Aim at the ground, closer.")
 		return
 	var pos: Vector3 = hit["position"]
+	if kind == "totem":
+		_world().sv_join_household.rpc_id(1, display_name())   # planting one makes you family
 	if kind == "painting":
 		var col2: Object = hit["collider"]
 		var wallish: bool = col2 is Node and col2.has_meta("struct") \
@@ -1494,6 +1528,15 @@ func _interact() -> void:
 		return
 	if col is Node and col.has_meta("crate"):
 		_world().sv_loot_crate.rpc_id(1, String(col.name))
+		return
+	if col is Node and col.has_meta("struct") and held_item() == "lock" \
+			and col.get_meta("kind") in GameItems.LOCKABLE and not col.get_meta("locked", false):
+		if inv.get("lock", 0) > 0:
+			inv["lock"] -= 1
+			_world().sv_attach_lock.rpc_id(1, String(col.name), display_name())
+			Sfx.play(self, "place", -8.0)
+			if hud:
+				hud.flash("Locked. Your key — and your household's — turns it.")
 		return
 	if col is Node and col.has_meta("depths_hatch"):
 		if _world().get_node("Monolith").get_meta("awakened"):
@@ -1563,6 +1606,8 @@ func _interact() -> void:
 			if not cooked_something and hud:
 				hud.flash("Nothing raw to cook. Hunt a deer or cast a line.")
 		elif kind in GameItems.CONTAINERS:
+			if col.get_meta("locked", false) and not _lock_pass(col):
+				return
 			if hud:
 				hud.open_container(String(col.name))
 		elif kind == "furnace":
@@ -1575,6 +1620,8 @@ func _interact() -> void:
 			elif hud:
 				hud.flash("The furnace wants 4 wood at a time.")
 		elif kind in ["door", "shutter", "trapdoor"]:
+			if col.get_meta("locked", false) and not _lock_pass(col):
+				return
 			_world().sv_toggle_door.rpc_id(1, String(col.name))
 		elif in_build_mode() and kind in GameItems.BUILD_PIECES:
 			if inv.get("wood", 0) >= 1:
@@ -1589,6 +1636,15 @@ func _interact() -> void:
 			var can_arm: bool = w2.is_night() and inv.get("moonstone", 0) > 0 \
 				and not w2.peaceful and not w2.sealed \
 				and (w2.game_mode == "story" or (w2.game_mode == "hard" and w2.hard_nights >= w2.HARD_NIGHTS_TO_HARDCORE))
+			if display_name() not in w2.household:
+				if _join_confirm > 0.0:
+					w2.sv_join_household.rpc_id(1, display_name())
+					_join_confirm = 0.0
+				else:
+					_join_confirm = 4.0
+					if hud:
+						hud.flash("Join this totem's household? Shared locks, shared claim.\nPress E again to swear in.")
+				return
 			if can_arm:
 				if _arm_confirm > 0.0:
 					inv["moonstone"] -= 1
@@ -1632,6 +1688,14 @@ func craft(recipe: String) -> void:
 			else:
 				hud.flash("Too fiddly for cold hands — craft a Workbench and stand at it.")
 		return
+	if recipe == "key_copy" and inv.get("key", 0) <= 0 and inv.get("lock", 0) <= 0:
+		if hud:
+			hud.flash("Copying needs an original — a key or its lock in your pack.")
+		return
+	if recipe == "lock_copy" and inv.get("key", 0) <= 0:
+		if hud:
+			hud.flash("A matching lock is cut from its key. Bring the key.")
+		return
 	var cost: Dictionary = GameItems.RECIPES[recipe]
 	for mat in cost:
 		if inv.get(mat, 0) < cost[mat]:
@@ -1642,6 +1706,22 @@ func craft(recipe: String) -> void:
 		inv[mat] -= cost[mat]
 	crafted[recipe] = true
 	Sfx.play(self, "craft", -8.0)
+	if recipe in ["lock_and_key", "key_copy", "lock_copy"]:
+		match recipe:
+			"lock_and_key":
+				inv["lock"] = inv.get("lock", 0) + 1
+				inv["key"] = inv.get("key", 0) + 1
+				if hud:
+					hud.flash("Forged as one, bound forever. Hold the lock (right-click) and E it onto a door or chest.")
+			"key_copy":
+				inv["key"] = inv.get("key", 0) + 1
+				if hud:
+					hud.flash("A twin key, cut true.")
+			"lock_copy":
+				inv["lock"] = inv.get("lock", 0) + 1
+				if hud:
+					hud.flash("Another lock that answers your key.")
+		return
 	_auto_hotbar(recipe)
 	if recipe in GameItems.CLOTHES:
 		inv[recipe] = inv.get(recipe, 0) + 1   # into the pack either way

@@ -946,6 +946,8 @@ func _run_smoke_test() -> void:
 		p.events.get("monolith_awakened", 0), p.inv.get("iron_bar", 0)])
 	ok = ok and world.get_node("Monolith").get_meta("awakened") and p.events.get("monolith_awakened", 0) == 1
 
+	p.hunger = 100.0
+	p.hp = 100.0
 	# the depths: hall exists, heartstone iron-gated mining, heart restored
 	p.global_position = world.depths_center + Vector3(10, 1.2, 0)
 	await get_tree().create_timer(1.2).timeout
@@ -966,12 +968,16 @@ func _run_smoke_test() -> void:
 	world._on_nightfall()   # peaceful: must not spawn a wave
 	await get_tree().create_timer(0.2).timeout
 
+	p.hunger = 100.0
+	p.hp = 100.0
 	# grid inventory: reconcile builds stacks, crafts auto-bind to hotbar
 	p.reconcile_grid()
 	print("[smoke] grid: %d stacks, axe bound=%s, rows=%d" % [p.grid_stacks.size(), "crude_axe" in p.hotbar_items, p.grid_rows()])
 	ok = ok and p.grid_stacks.size() > 0 and "crude_axe" in p.hotbar_items
 	ok = ok and p.held_item() == p.hotbar_items[p.selected_slot]
 
+	p.hunger = 100.0
+	p.hp = 100.0
 	# fishing: rod crafts by hand, catches land in the pack, fire cooks them
 	p.inv["branch"] = p.inv.get("branch", 0) + 2
 	p.inv["string"] = p.inv.get("string", 0) + 2
@@ -982,6 +988,8 @@ func _run_smoke_test() -> void:
 	print("[smoke] fishing: rod=%s raw_fish=%d" % [p.owned_tools.has("fishing_rod"), p.inv.get("raw_fish", 0)])
 	ok = ok and p.inv.get("raw_fish", 0) >= 1
 
+	p.hunger = 100.0
+	p.hp = 100.0
 	# biomes + new fauna + poison cure
 	var biomes := {}
 	for bx in range(-100, 101, 20):
@@ -1000,6 +1008,8 @@ func _run_smoke_test() -> void:
 	print("[smoke] venom cured: ", p.poisoned_t == 0.0)
 	ok = ok and p.poisoned_t == 0.0
 
+	p.hunger = 100.0
+	p.hp = 100.0
 	# weather: rain gutters an unsheltered torch and douses burning walls
 	var tree_count := world.get_node("Resources").get_children().filter(
 		func(r): return r.get_meta("kind") == "tree").size()
@@ -1015,6 +1025,8 @@ func _run_smoke_test() -> void:
 	ok = ok and world.weather == "rain" and float(wet_torch.get_meta("hp")) < torch_hp0 and tree_count > 100
 	world.rx_weather("clear")
 
+	p.hunger = 100.0
+	p.hp = 100.0
 	# identity: profile roundtrip + appearance applied to the rig
 	var orig_profile := ""
 	if FileAccess.file_exists(Profile.PATH):
@@ -1077,6 +1089,8 @@ func _run_smoke_test() -> void:
 	print("[smoke] demolish: refund=%d wood" % [p.inv.get("wood", 0) - pre_wood])
 	ok = ok and p.inv.get("wood", 0) == pre_wood + 2
 
+	p.hunger = 100.0
+	p.hp = 100.0
 	# building v2: stilt foundation over water, stairs, ladder, trapdoor
 	var water_p := Vector3.ZERO
 	for r in range(8, 120, 4):
@@ -1105,6 +1119,8 @@ func _run_smoke_test() -> void:
 		world.get_node("Structures").get_children().any(func(s): return s.get_meta("kind") == "stairs")])
 	ok = ok and pillars.size() == 4 and trap.get_meta("open") == true and has_ladder
 
+	p.hunger = 100.0
+	p.hp = 100.0
 	# cloth & dye: dry grass all the way to a yellow shirt
 	world.sv_place_structure("workbench", p.global_position + Vector3(3, 0, -3), 0.0)
 	await get_tree().create_timer(0.2).timeout
@@ -1170,9 +1186,77 @@ func _run_smoke_test() -> void:
 	p._eat()
 	print("[smoke] hunger after eating: ", p.hunger)
 	ok = ok and p.hunger > 20.0
+	p.hunger = 100.0
+	p.hp = 100.0   # no starving to death mid-test, thanks
 	await get_tree().create_timer(0.5).timeout
 	print("[smoke] goals completed: ", p.hud.goals_done, "/", p.hud.goals.size())
 	ok = ok and p.hud.goals_done >= 4
+
+	p.hunger = 100.0
+	p.hp = 100.0
+	# death drops everything into a lootable pack
+	var pre_packs := world.get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "pack").size()
+	p.inv["wood"] = 12
+	p.inv["berries"] = 3
+	var death_spot := p.global_position
+	p.rx_damage(9999.0)
+	await get_tree().create_timer(0.3).timeout
+	var packs := world.get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "pack")
+	print("[smoke] death: packs %d->%d inv_wood=%d hp=%0.f" % [pre_packs, packs.size(), p.inv.get("wood", 0), p.hp])
+	ok = ok and packs.size() == pre_packs + 1 and p.inv.get("wood", 0) == 0 and p.hp > 0
+	var my_pack: Node = null
+	for pk in packs:
+		if my_pack == null or pk.global_position.distance_to(death_spot) < my_pack.global_position.distance_to(death_spot):
+			my_pack = pk
+	var my_pack_name := String(my_pack.name)
+	for take_round in 40:
+		if not world.get_node("Structures").has_node(my_pack_name):
+			break
+		var st2: Dictionary = world.get_node("Structures").get_node(my_pack_name).get_meta("store")
+		if st2.is_empty():
+			break
+		world.sv_container_take(my_pack_name, st2.keys()[0])
+		await get_tree().create_timer(0.05).timeout
+	await get_tree().create_timer(0.3).timeout
+	var pack_gone: bool = not world.get_node("Structures").has_node(my_pack_name)
+	print("[smoke] pack reclaimed: wood=%d my_pack_gone=%s" % [p.inv.get("wood", 0), pack_gone])
+	ok = ok and p.inv.get("wood", 0) >= 12 and pack_gone
+
+	p.hunger = 100.0
+	p.hp = 100.0
+	# locks & household: pair-craft, mount, gate, bash, share
+	world.sv_place_structure("workbench", p.global_position + Vector3(2, 0, 2), 0.0)
+	world.sv_place_structure("doorway", p.global_position + Vector3(-3, 0, 2), 0.0)
+	await get_tree().create_timer(0.2).timeout
+	var lock_frame: Node = world.get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "doorway").back()
+	world.sv_place_structure("door", lock_frame.global_position + lock_frame.global_transform.basis.x * -0.6, 0.0)
+	await get_tree().create_timer(0.2).timeout
+	p.inv["iron_bar"] = 6
+	p.inv["string"] = p.inv.get("string", 0) + 2
+	p.craft("lock_and_key")
+	ok = ok and p.inv.get("lock", 0) == 1 and p.inv.get("key", 0) == 1
+	p.craft("key_copy")
+	ok = ok and p.inv.get("key", 0) == 2
+	var lock_door: Node = world.get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "door").back()
+	world.sv_attach_lock(lock_door.name, p.display_name())
+	p.inv["lock"] -= 1
+	await get_tree().create_timer(0.2).timeout
+	ok = ok and lock_door.get_meta("locked") == true
+	ok = ok and world.lock_allows(lock_door, p.display_name())
+	ok = ok and not world.lock_allows(lock_door, "stranger")
+	world.sv_join_household("stranger")
+	world.sv_join_household(p.display_name())
+	await get_tree().create_timer(0.2).timeout
+	var shared: bool = world.lock_allows(lock_door, "stranger")
+	for i in 16:
+		world.sv_bash_lock(lock_door.name, 28.0)
+	await get_tree().create_timer(0.3).timeout
+	print("[smoke] locks: mounted=true shared_after_household=%s bashed_open=%s" % [shared, not lock_door.get_meta("locked")])
+	ok = ok and shared and not lock_door.get_meta("locked")
 
 	# the long game: arm -> wave -> hardcore trials -> totem loss -> seal
 	world.peaceful = false   # test seam: undo the heart for the gauntlet

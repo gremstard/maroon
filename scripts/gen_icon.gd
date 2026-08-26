@@ -93,6 +93,20 @@ func _init() -> void:
 				var p := img.get_pixel(px, y)
 				img.set_pixel(px, y, p.lerp(sun_c, 0.25))
 
+	# rounded corners: modern app-icon silhouette
+	var radius := 96.0
+	for y in s:
+		for x in s:
+			var cx := clampf(x, radius, s - radius)
+			var cy := clampf(y, radius, s - radius)
+			var d := Vector2(x - cx, y - cy).length()
+			if d > radius:
+				img.set_pixel(x, y, Color(0, 0, 0, 0))
+			elif d > radius - 2.0:
+				var p := img.get_pixel(x, y)
+				p.a = clampf((radius - d) / 2.0, 0.0, 1.0)
+				img.set_pixel(x, y, p)
+
 	img.save_png("res://icon.png")
 	print("emblem written")
 	quit()
