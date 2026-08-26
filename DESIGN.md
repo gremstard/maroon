@@ -173,6 +173,57 @@ second colored box instead.
 - Server-authoritative world state (resources, animals, structures, time).
 - No text chat, no voice, no names beyond a small ID tag. By design.
 
+## The Long Game — mode arc (designed, not yet built)
+The game's shape: Minecraft never ends, Rust never rests. Maroon does both —
+**you earn the cozy game by beating the brutal one.** Target: 10–20 hours to
+beat for a big group, then peaceful forever (realistically 30+ total).
+
+**STORY → HARD → HARDCORE → THE END → PEACEFUL**
+
+- **Story** *(confirmed, current game)* — the 30-goal ladder, both chains.
+- **Hard mode** *(confirmed)* — armed deliberately: **feed the totem a
+  moonstone at night; it drinks the light and darkens.** A group-consent
+  ritual, not an accidental trigger *(recommended over auto-start at goal 30)*.
+  Every night the totem calls **enemy waves** that assault the claim — they
+  target walls and the totem itself, scaling each night. Between waves:
+  **seed-generated goals** (gather quotas before dawn, keep stock above X,
+  slay all raiders) with loot-crate rewards at the totem. Wave composition
+  draws from the **biome the totem stands in** — where you built, hours ago,
+  becomes strategy.
+- **Hardcore** *(confirmed)* — seed-generated goal gauntlet on **timers**,
+  fought while waves continue. Rewards are large: the loot from each round is
+  what survives the next. *(Recommended failure rule: a failed goal destroys
+  ONE totem; game over only when the last totem falls — so extra totems are
+  harder waves in hard mode but extra lives in hardcore. The one-fail-and-out
+  variant stays as an optional "Iron" toggle.)*
+- **Game over** *(confirmed)* — you do not lose the base; **you lose the way
+  back in.** The world save remains forever, sealed. A tomb with your name on
+  it. New respawns refused; the group's run is over.
+- **The End** *(confirmed)* — survive the full gauntlet and the game is
+  *beaten*. Victory is recorded in the save and announced to everyone.
+- **Peaceful** *(confirmed)* — the reward state: no waves, no decay, hostiles
+  scarce. Harvest, build, sprawl. New material: **brick** (shore clay, fired
+  at the forge). Occasional *optional* seeded events and goals so there's
+  always a reason to gather tomorrow. Multiple totems now cost nothing —
+  claim the whole island. It's yours. You paid for it.
+
+**Open:** exact wave sizes/night curves and round counts (tuned only through
+playtests — 10–20 h is the target, numbers are servants of that); whether a
+sealed world can be reopened as a fresh-seed "pilgrimage" (read-only visit).
+
+## Biomes (designed, next build pass)
+Formalize the zones that already exist and give each a resident threat:
+| Biome | Where | Signature | Resident enemy |
+|---|---|---|---|
+| Shore | coast ring | forage, clay *(new)* | **Crow flock** — steals unattended camp items |
+| Forest | mid elevation | wood, deadfall, deer/boar | wolves at night |
+| Dry Meadow | grass patches | fiber | **Snake** — ambush + venom (antidote: berries at campfire) |
+| Highlands | h > 10 | iron, moonstone, bears | bear |
+| The Dark | sea cave (+ future depths) | moonstone | dweller |
+| Far Isle | past the reef | everything, denser | all of the above, hungrier |
+Hard-mode waves are drawn from the totem's biome: build on the shore, fight
+crows and wolves; build in the highlands, bears come. Location = loadout.
+
 ## Deliberate non-goals
 - No PvP, ever. No raiding of other players' claims.
 - No chat/comms of any kind.
