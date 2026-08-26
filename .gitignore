@@ -2,3 +2,4 @@
 build/
 *.tpz
 .DS_Store
+firebase_config.json
