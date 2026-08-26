@@ -159,6 +159,13 @@ func _ready() -> void:
 					await get_tree().create_timer(0.2).timeout
 					pl.hud.open_container(String(s.name))
 			await get_tree().create_timer(0.5).timeout
+		if "--shot-isle" in args:
+			pl.global_position = Vector3(0, 165, 120)
+			pl.velocity = Vector3.ZERO
+			pl.rotation.y = 0.0
+			pl.head.rotation.x = -0.95
+			await get_tree().process_frame
+			await get_tree().process_frame
 		if "--shot-lev" in args:
 			world._summon_leviathan()
 			await get_tree().create_timer(4.0).timeout
@@ -869,6 +876,24 @@ func _run_smoke_test() -> void:
 	print("[smoke] grid: %d stacks, axe bound=%s, rows=%d" % [p.grid_stacks.size(), "crude_axe" in p.hotbar_items, p.grid_rows()])
 	ok = ok and p.grid_stacks.size() > 0 and "crude_axe" in p.hotbar_items
 	ok = ok and p.held_item() == p.hotbar_items[p.selected_slot]
+
+	# biomes + new fauna + poison cure
+	var biomes := {}
+	for bx in range(-100, 101, 20):
+		for bz in range(-100, 101, 20):
+			if world.height_at(bx, bz) > 0.5:
+				biomes[world.biome_at(bx, bz)] = true
+	var roster2 := {}
+	for a2 in world.get_node("Animals").get_children():
+		roster2[a2.kind] = roster2.get(a2.kind, 0) + 1
+	print("[smoke] biomes seen: %s · snakes=%d crows=%d ponds=%d" % [biomes.keys(), roster2.get("snake", 0), roster2.get("crow", 0), world.pond_centers.size()])
+	ok = ok and biomes.size() >= 3 and roster2.get("snake", 0) >= 1 and roster2.get("crow", 0) >= 1
+	p.rx_poison()
+	ok = ok and p.poisoned_t > 0.0
+	p.inv["berries"] = p.inv.get("berries", 0) + 1
+	p._eat("berries")
+	print("[smoke] venom cured: ", p.poisoned_t == 0.0)
+	ok = ok and p.poisoned_t == 0.0
 
 	# identity: profile roundtrip + appearance applied to the rig
 	var orig_profile := ""

@@ -15,6 +15,8 @@ const STATS := {
 	"bear": {"hp": 150.0, "dmg": 25.0, "meat": 4, "radius": 0.7,  "color": Color(0.24, 0.16, 0.10)},
 	"boar": {"hp": 70.0, "dmg": 15.0, "meat": 3, "radius": 0.45, "color": Color(0.74, 0.64, 0.44)},
 	"dweller": {"hp": 90.0, "dmg": 20.0, "meat": 1, "radius": 0.5, "color": Color(0.16, 0.14, 0.20)},
+	"snake": {"hp": 25.0, "dmg": 6.0, "meat": 1, "radius": 0.3, "color": Color(0.36, 0.44, 0.20)},
+	"crow": {"hp": 15.0, "dmg": 0.0, "meat": 1, "radius": 0.25, "color": Color(0.12, 0.12, 0.14)},
 }
 
 var kind := "deer"
@@ -62,6 +64,32 @@ func _ready() -> void:
 	head.material_override = m
 	head.position = Vector3(0, 0.75, -0.7) * scale_f
 	add_child(head)
+	if kind == "snake":
+		# low, long, patient
+		mi.position.y = 0.16
+		mi.scale = Vector3(0.9, 0.55, 1.7)
+		head.position = Vector3(0, 0.22, -0.72)
+	if kind == "crow":
+		head.position = Vector3(0, 0.55, -0.4)
+		for side in [-1.0, 1.0]:
+			var wing := MeshInstance3D.new()
+			var wm := BoxMesh.new()
+			wm.size = Vector3(0.55, 0.04, 0.24)
+			wing.mesh = wm
+			wing.material_override = m
+			wing.position = Vector3(side * 0.35, 0.45, 0)
+			wing.rotation_degrees.z = side * 12.0
+			add_child(wing)
+		var beak := MeshInstance3D.new()
+		var bkm := CylinderMesh.new()
+		bkm.top_radius = 0.0
+		bkm.bottom_radius = 0.04
+		bkm.height = 0.18
+		beak.mesh = bkm
+		beak.material_override = _beak_mat()
+		beak.rotation_degrees.x = -90
+		beak.position = Vector3(0, 0.55, -0.6)
+		add_child(beak)
 	if kind == "dweller":
 		# too many pale eyes, and legs it shouldn't have
 		var deye := StandardMaterial3D.new()
@@ -151,6 +179,10 @@ func on_provoked(peer: int) -> void:
 		"dweller":
 			aggro_peer = peer
 			aggro_timer = 20.0
+		"snake", "crow":
+			mode = "flee" if kind == "snake" else "leave"
+			mode_timer = 4.0
+			flee_dir = Vector3(randf() - 0.5, 0, randf() - 0.5).normalized()
 
 # Called by World on the server every physics frame.
 func server_ai(delta: float, world: World) -> void:
@@ -169,7 +201,64 @@ func server_ai(delta: float, world: World) -> void:
 			_ai_boar(delta, world)
 		"dweller":
 			_ai_dweller(delta, world)
-	global_position.y = world.height_at(global_position.x, global_position.z) + 0.1
+		"snake":
+			_ai_snake(delta, world)
+		"crow":
+			_ai_crow(delta, world)
+	var ground := world.height_at(global_position.x, global_position.z)
+	if kind == "crow":
+		global_position.y = ground + 2.6 + sin(Time.get_ticks_msec() * 0.003) * 0.35
+	else:
+		global_position.y = ground + 0.1
+
+func _beak_mat() -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.75, 0.62, 0.30)
+	return m
+
+func _ai_snake(delta: float, world: World) -> void:
+	# It doesn't chase. It waits in the grass. That's worse.
+	match mode:
+		"flee":
+			_move(flee_dir, 5.0, delta, world)
+			if mode_timer <= 0.0:
+				mode = "idle"
+		_:
+			var t := _nearest_player(world)
+			if t and global_position.distance_to(t.global_position) < 2.4 and attack_cooldown <= 0.0:
+				attack_cooldown = 4.0
+				t.rx_damage.rpc_id(t.peer_id, STATS["snake"]["dmg"])
+				t.rx_poison.rpc_id(t.peer_id)
+				mode = "flee"
+				mode_timer = 3.0
+				flee_dir = (global_position - t.global_position).normalized()
+				flee_dir.y = 0
+			elif randf() < delta * 0.03:
+				_wander(delta, world, 0.8)   # the grass shifts, barely
+
+func _ai_crow(delta: float, world: World) -> void:
+	# Circles overhead; swoops anyone carrying food and takes a bite with it.
+	match mode:
+		"leave":
+			_move(flee_dir, 7.0, delta, world)
+			if mode_timer <= 0.0:
+				mode = "idle"
+				wander_timer = 0.0
+		_:
+			var t := _nearest_player(world)
+			if t and global_position.distance_to(t.global_position) < 22.0 and attack_cooldown <= 0.0:
+				var to_t := t.global_position - global_position
+				to_t.y = 0
+				if to_t.length() < 1.3:
+					attack_cooldown = 12.0
+					t.rx_crow_steal.rpc_id(t.peer_id)
+					mode = "leave"
+					mode_timer = 4.0
+					flee_dir = -to_t.normalized()
+				else:
+					_move(to_t.normalized(), 6.5, delta, world)
+			else:
+				_wander(delta, world, 3.5)
 
 # ---------------------------------------------------------------- movement bits
 

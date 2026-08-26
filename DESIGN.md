@@ -306,10 +306,23 @@ Big systems, in build order, each its own pass:
 5. **Advanced crafting stations** — **furnace** (burns wood → charcoal;
    charcoal keeps fires fed and smelts iron better), **workbench** (gates
    higher recipes). Forge stays the metalworking station.
-6. **Storage & decor** — storage as placeables with real inventories:
-   **chest** (proper-looking), **crate**, **cabinet**, **drawers**; decor
-   starting with **paintings** (player-pickable art?), rugs, trophies
-   (Leviathan head over the door).
+6. **Storage & decor** — storage shipped (0.12). Decor vision (queued):
+   **furniture that makes a home a home** — couch, chair, table, vases, rugs,
+   trophies (Leviathan head over the door). **Salvage**: any placed decor/item
+   can be salvaged — displaced back into your inventory (or dropped at your
+   feet if the pack is full) and re-placed elsewhere, art intact.
+   **Painting rework**: paints made from **oils** (sourced the real-world way)
+   in blue/yellow/red/white + **brushes** → combined into a **painting kit**;
+   **canvas** is the placeable (wall-hung; extra materials add a frame); using
+   the kit on a canvas opens a **painting editor** — you paint it yourself.
+   Salvage a painting, hang it elsewhere.
+6b. **Furnace attention economy (rework, queued)** — starting the furnace
+   requires *staying with it* until done (Esc doesn't pause it): it stays lit
+   until turned off or out of fuel; wrong fuel or inattention makes **ash**,
+   over/under-cooking makes too much or too little. The **Range** is the
+   expensive upgrade: better looking, set X amount, walk away, perfect
+   results. Attention is the cost; iron buys convenience — same philosophy
+   as torch vs lamp.
 7. **Lighting overhaul** — **torch**: holdable (lights around you while held),
    placeable on floor OR wall, **throwable**, but open flame: chance to set
    structures/grass/you on fire (campfires too — fire spread as a system).
@@ -325,6 +338,18 @@ Big systems, in build order, each its own pass:
   group chat** — groups being small formal bands, which is also what disables
   accidental friendly fire inside them.
 - No wipes — worlds are meant to be kept.
+
+## v0.14 status (this repo)
+Added in 0.14 — **a natural world**: coastlines are no longer circles —
+angle-sampled noise breathes bays, headlands and inlets into both islands
+(mrrzone's "too small and circle-y" note); the main island grew to ~240 m;
+three seeded **ponds** dip below the water table inland. **Biomes formalized**
+(shore / forest / meadow / highland via height + moisture noise) with
+biome-driven scatter; **three tree species** (pine, broadleaf, banded birch);
+**leaf litter** under trees and **flowers** in meadows (pure set dressing).
+New fauna: **snake** (meadow ambusher — venom DoT, berries are the cure) and
+**crow** (circles overhead, swoops and steals food off your pack). Furniture/
+salvage/painting-editor and furnace-attention/range notes queued (6, 6b).
 
 ## v0.13 status (this repo)
 Added in 0.13 — **cloth, dye, fire & light**: the realism chain lands — string

@@ -450,6 +450,11 @@ func _survival_tick(delta: float) -> void:
 			rx_equip.rpc(equipment)      # late joiners see your gear
 		if not appearance.is_empty():
 			rx_appearance.rpc(appearance)   # ...and your face
+	if poisoned_t > 0.0:
+		poisoned_t -= delta
+		hp -= delta * 1.3
+		if hp <= 0.0:
+			_respawn()
 	hunger = maxf(hunger - delta * 100.0 / 480.0, 0.0)   # empty in ~8 min
 	if hunger <= 0.0:
 		hp -= delta * 2.0
@@ -915,6 +920,33 @@ func _set_lamp(on: bool) -> void:
 	if changed and is_local() and multiplayer.multiplayer_peer != null:
 		rx_lamp.rpc(on)
 
+var poisoned_t := 0.0
+
+@rpc("any_peer", "call_local", "reliable")
+func rx_poison() -> void:
+	if not is_local():
+		return
+	if multiplayer.get_remote_sender_id() not in [0, 1]:
+		return
+	poisoned_t = 8.0
+	Sfx.play(self, "hurt", -8.0)
+	if hud:
+		hud.flash("Snakebite! The venom burns — berries are the cure.")
+
+@rpc("any_peer", "call_local", "reliable")
+func rx_crow_steal() -> void:
+	if not is_local():
+		return
+	if multiplayer.get_remote_sender_id() not in [0, 1]:
+		return
+	for food in ["cooked_meat", "berries", "raw_meat"]:
+		if inv.get(food, 0) > 0:
+			inv[food] -= 1
+			Sfx.play(self, "whoosh", -4.0)
+			if hud:
+				hud.flash("A crow snatches your %s right off your pack!" % GameItems.nice(food))
+			return
+
 @rpc("any_peer", "call_remote", "reliable")
 func rx_lamp(on: bool) -> void:
 	if multiplayer.get_remote_sender_id() != peer_id:
@@ -1224,6 +1256,10 @@ func _eat(preferred := "") -> void:
 			var f: Dictionary = GameItems.FOODS[food]
 			hunger = minf(hunger + f["hunger"], 100.0)
 			hp = clampf(hp + f["hp"], 1.0, 100.0)
+			if food == "berries" and poisoned_t > 0.0:
+				poisoned_t = 0.0
+				if hud:
+					hud.flash("The venom fades. Berries: nature's apology.")
 			Sfx.play(self, "eat", -6.0)
 			if hud:
 				hud.flash("Ate %s." % GameItems.nice(food))

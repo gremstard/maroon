@@ -3,7 +3,7 @@ class_name World extends Node3D
 # Server-authoritative for everything dynamic; terrain/resources are generated
 # deterministically from the seed on every peer.
 
-const SIZE := 96          # grid cells per side
+const SIZE := 120         # grid cells per side
 const CELL := 2.0         # meters per cell
 const DAY_LENGTH := 720.0 # real seconds per in-game day (12 min)
 const CLAIM_RADIUS := 20.0
@@ -41,6 +41,11 @@ func setup(s: int) -> void:
 	far_rng.seed = wseed + 31337
 	var far_ang := far_rng.randf() * TAU
 	far_center = Vector2(cos(far_ang), sin(far_ang)) * FAR_DIST
+	pond_centers.clear()
+	for i in 3:
+		var pa := far_rng.randf() * TAU
+		var pr := far_rng.randf_range(25.0, 70.0)
+		pond_centers.append(Vector2(cos(pa), sin(pa)) * pr)
 
 	_build_environment()
 	_build_terrain()
@@ -58,20 +63,34 @@ func setup(s: int) -> void:
 
 # ================================================================ terrain
 
-const FAR_DIST := 190.0    # how far past the reef the Far Isle sits
-const FAR_R := 52.0        # its radius — smaller, taller, harsher
+const FAR_DIST := 235.0    # how far past the reef the Far Isle sits
+const FAR_R := 60.0        # its radius — smaller, taller, harsher
 var far_center := Vector2.ZERO
+var pond_centers: Array[Vector2] = []
+
+func _coast_wobble(v: Vector2, seed_off: float) -> float:
+	# No island in nature is a circle. The coastline radius breathes with
+	# angle-sampled noise: bays, headlands, that one weird peninsula.
+	if v.length() < 0.01:
+		return 1.0
+	var d := v.normalized()
+	return 1.0 + 0.30 * noise.get_noise_2d(d.x * 38.0 + seed_off, d.y * 38.0 - seed_off)
 
 func height_at(x: float, z: float) -> float:
-	var r := Vector2(x, z).length() / (SIZE * CELL * 0.48)
+	var v := Vector2(x, z)
+	var r := v.length() / (SIZE * CELL * 0.46 * _coast_wobble(v, 11.0))
 	var falloff := clampf(1.0 - r * r * r, 0.0, 1.0)
 	var n := noise.get_noise_2d(x, z) * 0.5 + 0.5
 	var h := (n * 16.0 + 3.0) * falloff - 3.0
 	if far_center != Vector2.ZERO:
-		var fr := (Vector2(x, z) - far_center).length() / FAR_R
+		var fv := v - far_center
+		var fr := fv.length() / (FAR_R * _coast_wobble(fv, 47.0))
 		var ffall := clampf(1.0 - fr * fr * fr, 0.0, 1.0)
 		var fn := noise.get_noise_2d(x + 533.0, z - 777.0) * 0.5 + 0.5
 		h = maxf(h, (fn * 22.0 + 4.0) * ffall - 3.0)
+	# ponds: gentle inland dips that fill with the sea-level water table
+	for p in pond_centers:
+		h -= 5.0 * exp(-v.distance_squared_to(p) / 90.0)
 	return h
 
 func _build_terrain() -> void:
@@ -198,32 +217,103 @@ func _scatter_resources() -> void:
 	rng.seed = wseed
 	var half := SIZE * CELL * 0.45
 	var holder := get_node("Resources")
-	for i in 1000:
+	var deco := Node3D.new()
+	deco.name = "Deco"
+	add_child(deco)
+	for i in 1600:
 		var x := rng.randf_range(-half, half)
 		var z := rng.randf_range(-half, half)
 		var roll := rng.randf()
 		var h := height_at(x, z)
-		if h < 1.2:
+		if h < 0.5:
 			continue
-		var kind := "tree"
-		if roll < 0.12:
-			kind = "rock"
-		elif roll < 0.24:
-			kind = "bush"
-		elif roll < 0.40:
-			kind = "branch"   # deadfall under the canopy
-		elif roll < 0.56:
-			kind = "grass"    # dry grass -> fiber -> string
-		elif roll < 0.66:
-			kind = "pebble"   # loose surface stones
-		elif h > 10.0:
-			kind = "rock"     # highlands are rockier
-		if h > 11.0 and roll > 0.85:
-			kind = "iron"     # ore only high up
+		var kind := ""
+		match biome_at(x, z):
+			"shore":
+				if roll < 0.30:
+					kind = "pebble"
+				elif roll < 0.45:
+					kind = "grass"
+				elif roll < 0.52:
+					kind = "branch"   # driftwood
+			"forest":
+				if roll < 0.40:
+					kind = "tree"
+				elif roll < 0.56:
+					kind = "branch"
+				elif roll < 0.66:
+					kind = "bush"
+				elif roll < 0.72:
+					kind = "rock"
+				elif roll < 0.78:
+					kind = "grass"
+			"meadow":
+				if roll < 0.40:
+					kind = "grass"
+				elif roll < 0.52:
+					kind = "bush"
+				elif roll < 0.58:
+					kind = "branch"
+				elif roll < 0.64:
+					kind = "tree"
+				elif roll < 0.80:
+					_scatter_deco(deco, "flower", Vector3(x, h, z), rng)
+			"highland":
+				if roll < 0.26:
+					kind = "rock"
+				elif roll < 0.38:
+					kind = "iron"
+				elif roll < 0.44 and h > 11.0:
+					kind = "moonstone" if roll < 0.40 else "iron"
+				elif roll < 0.56:
+					kind = "pebble"
+				elif roll < 0.64:
+					kind = "tree"
+		if kind == "":
+			continue
 		var res := _make_resource(kind, i)
 		holder.add_child(res)
 		res.global_position = Vector3(x, h, z)
 		res.rotation.y = rng.randf() * TAU
+		if kind == "tree":
+			for k in rng.randi_range(0, 2):
+				_scatter_deco(deco, "leaves", Vector3(x + rng.randf_range(-2.5, 2.5), 0, z + rng.randf_range(-2.5, 2.5)), rng)
+
+func biome_at(x: float, z: float) -> String:
+	var h := height_at(x, z)
+	if h < 1.2:
+		return "shore"
+	if h > 10.0:
+		return "highland"
+	var m := noise.get_noise_2d(x * 0.6 + 999.0, z * 0.6 - 999.0)
+	return "meadow" if m > 0.16 else "forest"
+
+func _scatter_deco(deco: Node3D, kind: String, pos: Vector3, rng: RandomNumberGenerator) -> void:
+	# pure set dressing — no collision, no interaction, just life
+	var mi := MeshInstance3D.new()
+	match kind:
+		"leaves":
+			var dm := CylinderMesh.new()
+			dm.top_radius = rng.randf_range(0.3, 0.7)
+			dm.bottom_radius = dm.top_radius
+			dm.height = 0.04
+			mi.mesh = dm
+			mi.material_override = _flat_mat(Color(0.48, 0.34, 0.16).lerp(Color(0.62, 0.42, 0.18), rng.randf()))
+		"flower":
+			var fm := CylinderMesh.new()
+			fm.top_radius = 0.09
+			fm.bottom_radius = 0.02
+			fm.height = 0.3
+			mi.mesh = fm
+			var petals := [Color(0.85, 0.75, 0.30), Color(0.80, 0.35, 0.40), Color(0.75, 0.70, 0.85), Color(0.9, 0.9, 0.9)]
+			mi.material_override = _flat_mat(petals[rng.randi() % petals.size()])
+	deco.add_child(mi)
+	var h := height_at(pos.x, pos.z)
+	if h < 0.5:
+		mi.queue_free()
+		return
+	mi.position = Vector3(pos.x, h + (0.03 if kind == "leaves" else 0.15), pos.z)
+	mi.rotation.y = rng.randf() * TAU
 
 func _make_resource(kind: String, idx: int) -> StaticBody3D:
 	var body := StaticBody3D.new()
@@ -234,29 +324,53 @@ func _make_resource(kind: String, idx: int) -> StaticBody3D:
 	var shape := CollisionShape3D.new()
 	match kind:
 		"tree":
+			# three species, same wood: pine, broadleaf, birch
+			var variant := idx % 3
 			var trunk := MeshInstance3D.new()
 			var cyl := CylinderMesh.new()
-			cyl.top_radius = 0.25
-			cyl.bottom_radius = 0.35
-			cyl.height = 4.0
+			cyl.top_radius = 0.22 if variant == 2 else 0.25
+			cyl.bottom_radius = 0.3 if variant == 2 else 0.35
+			cyl.height = 4.6 if variant == 2 else 4.0
 			trunk.mesh = cyl
-			trunk.material_override = _flat_mat(Color(0.42, 0.30, 0.18))
-			trunk.position.y = 2.0
+			trunk.material_override = _flat_mat(
+				Color(0.82, 0.80, 0.74) if variant == 2 else Color(0.42, 0.30, 0.18))
+			trunk.position.y = cyl.height * 0.5
 			body.add_child(trunk)
+			if variant == 2:
+				# birch: bark bands
+				for band_y in [1.2, 2.4, 3.5]:
+					var band := MeshInstance3D.new()
+					var bcm := CylinderMesh.new()
+					bcm.top_radius = 0.235
+					bcm.bottom_radius = 0.235
+					bcm.height = 0.16
+					band.mesh = bcm
+					band.material_override = _flat_mat(Color(0.22, 0.20, 0.18))
+					band.position.y = band_y
+					body.add_child(band)
 			var leaves := MeshInstance3D.new()
-			var cone := CylinderMesh.new()
-			cone.top_radius = 0.0
-			cone.bottom_radius = 1.8
-			cone.height = 3.5
-			leaves.mesh = cone
-			leaves.material_override = _flat_mat(Color(0.16, 0.42, 0.20))
-			leaves.position.y = 4.8
+			if variant == 0:
+				var cone := CylinderMesh.new()
+				cone.top_radius = 0.0
+				cone.bottom_radius = 1.8
+				cone.height = 3.5
+				leaves.mesh = cone
+				leaves.material_override = _flat_mat(Color(0.16, 0.42, 0.20))
+				leaves.position.y = 4.8
+			else:
+				var ball := SphereMesh.new()
+				ball.radius = 2.1 if variant == 1 else 1.5
+				ball.height = 3.2 if variant == 1 else 2.4
+				leaves.mesh = ball
+				leaves.material_override = _flat_mat(
+					Color(0.24, 0.48, 0.20) if variant == 1 else Color(0.42, 0.56, 0.22))
+				leaves.position.y = 4.6 if variant == 1 else 5.1
 			body.add_child(leaves)
 			var cs := CylinderShape3D.new()
 			cs.radius = 0.4
-			cs.height = 4.0
+			cs.height = 4.4
 			shape.shape = cs
-			shape.position.y = 2.0
+			shape.position.y = 2.2
 		"rock":
 			var mi := MeshInstance3D.new()
 			var sm := SphereMesh.new()
@@ -468,6 +582,23 @@ func _spawn_initial_animals() -> void:
 		var dp := cave_pos + Vector3(cos(ang), 0, sin(ang)) * rng.randf_range(1.5, 6.0)
 		rx_spawn_animal.rpc("a_%d" % animal_counter, "dweller",
 			Vector3(dp.x, height_at(dp.x, dp.z) + 0.5, dp.z))
+	# snakes in the dry meadows, crows over the shore
+	for i in 4:
+		for attempt in 60:
+			var x := rng.randf_range(-SIZE * CELL * 0.4, SIZE * CELL * 0.4)
+			var z := rng.randf_range(-SIZE * CELL * 0.4, SIZE * CELL * 0.4)
+			if height_at(x, z) > 1.5 and biome_at(x, z) == "meadow":
+				animal_counter += 1
+				rx_spawn_animal.rpc("a_%d" % animal_counter, "snake", Vector3(x, height_at(x, z) + 0.3, z))
+				break
+	for i in 3:
+		for attempt in 60:
+			var x := rng.randf_range(-SIZE * CELL * 0.4, SIZE * CELL * 0.4)
+			var z := rng.randf_range(-SIZE * CELL * 0.4, SIZE * CELL * 0.4)
+			if height_at(x, z) > 0.4 and biome_at(x, z) in ["shore", "meadow"]:
+				animal_counter += 1
+				rx_spawn_animal.rpc("a_%d" % animal_counter, "crow", Vector3(x, height_at(x, z) + 2.5, z))
+				break
 	# the far isle is predator country
 	var far_kinds := ["bear", "bear", "wolf", "wolf", "wolf", "boar"]
 	for kind in far_kinds:
