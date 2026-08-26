@@ -11,6 +11,11 @@ const RECIPES := {
 	"torch":      {"branch": 1, "fiber": 2},
 	"campfire":   {"wood": 8, "stone": 4},
 	"workbench":  {"wood": 12, "stone": 4},
+	"crate":      {"wood": 6},
+	"chest":      {"wood": 10, "string": 1},
+	"drawers":    {"wood": 12, "string": 1},
+	"cabinet":    {"wood": 14, "string": 2},
+	"furnace":    {"stone": 16, "wood": 4},
 	"totem":      {"wood": 20, "stone": 10},
 	"forge":      {"stone": 20, "wood": 10},
 	"beacon":     {"wood": 10, "iron_ore": 3, "string": 2, "ancient_lens": 1},
@@ -25,7 +30,7 @@ const RECIPES := {
 	"hide_pants": {"hide": 3, "string": 2},
 	"hide_pack":  {"hide": 4, "string": 3},
 	# -------- forge-only (stand near a lit forge)
-	"iron_bar":   {"iron_ore": 2, "wood": 2},
+	"iron_bar":   {"iron_ore": 2, "charcoal": 1},
 	"iron_axe":   {"iron_bar": 2, "branch": 1, "string": 1},
 	"iron_pick":  {"iron_bar": 2, "branch": 1, "string": 1},
 	"iron_spear": {"iron_bar": 2, "branch": 2, "string": 1},
@@ -56,13 +61,17 @@ const BUILD_PIECES := {
 const BCELL := 3.0
 const BWALL_H := 2.6
 
-const PLACEABLES := ["torch", "campfire", "workbench", "totem", "forge", "beacon"]
+const PLACEABLES := ["torch", "campfire", "workbench", "crate", "chest",
+	"drawers", "cabinet", "furnace", "totem", "forge", "beacon"]
+
+# Storage: rows of a 4-wide grid; a container holds that many stacks.
+const CONTAINERS := {"crate": 2, "chest": 3, "drawers": 3, "cabinet": 4}
 const MATERIALS := ["string", "iron_bar"]   # crafted items that go back into the inventory
 
 # What you can make with cold hands and a flat rock. Everything else needs
 # a station — the workbench for real carpentry, the forge for metal.
 const HAND_RECIPES := ["string", "crude_axe", "crude_pick", "spear",
-	"torch", "campfire", "hammer", "workbench"]
+	"torch", "campfire", "hammer", "workbench", "crate"]
 const FORGE_ONLY := ["iron_bar", "iron_axe", "iron_pick", "iron_spear",
 	"iron_helm", "iron_chest", "scale_helm", "scale_chest"]
 
@@ -94,6 +103,12 @@ const DESCRIPTIONS := {
 	"torch": "Fire on a stick. Hold it, or plant it. The dark hates it.",
 	"campfire": "Cooks meat. Marks home.",
 	"workbench": "Real carpentry happens here. Place it, stand close, craft.",
+	"charcoal": "Wood, cooked dark in the furnace. Smelting runs on it.",
+	"crate": "Rough storage, quick to make. 8 stacks.",
+	"chest": "Proper storage with a lid. 12 stacks.",
+	"drawers": "Neat little compartments. 12 stacks.",
+	"cabinet": "The good furniture. 16 stacks.",
+	"furnace": "Burns wood into charcoal (E with 4 wood). Fuel for the forge.",
 	"totem": "Claims this ground. Feed it wood or the rot returns.",
 	"forge": "Ore goes in. Iron comes out. Stand close to work it.",
 	"beacon": "Needs the peak. Calls across the sea.",
@@ -158,7 +173,9 @@ const NICE_NAMES := {
 	"leviathan_scale": "Leviathan Scale",
 	"hide": "Hide", "iron_bar": "Iron Bar", "forge": "Forge",
 	"torch": "Torch", "moonstone": "Moonstone", "raft": "Raft",
-	"hammer": "Hammer", "workbench": "Workbench",
+	"hammer": "Hammer", "workbench": "Workbench", "charcoal": "Charcoal",
+	"crate": "Crate", "chest": "Chest", "drawers": "Drawers",
+	"cabinet": "Cabinet", "furnace": "Furnace",
 	"foundation": "Foundation", "floor": "Floor",
 	"half_wall": "Half Wall", "doorway": "Doorway", "window": "Window Wall",
 	"gable": "Gable", "roof": "Roof", "slope": "Sloped Roof",
@@ -212,6 +229,8 @@ const STACK_MAX := {
 	"berries": 20, "raw_meat": 10, "cooked_meat": 10, "hide": 20,
 	"iron_ore": 20, "iron_bar": 20, "leviathan_scale": 10, "moonstone": 5,
 	"torch": 10, "campfire": 3, "wall": 5, "totem": 2, "forge": 2, "beacon": 2,
+	"charcoal": 20, "crate": 3, "chest": 3, "drawers": 2, "cabinet": 2,
+	"furnace": 2, "workbench": 2,
 }
 
 static func stack_max(item: String) -> int:
@@ -235,6 +254,10 @@ const CATEGORY_COLORS := {
 	"torch": Color(0.70, 0.50, 0.25), "campfire": Color(0.60, 0.42, 0.22),
 	"totem": Color(0.55, 0.40, 0.45), "forge": Color(0.40, 0.40, 0.42),
 	"beacon": Color(0.65, 0.55, 0.30),
+	"charcoal": Color(0.20, 0.20, 0.22), "crate": Color(0.52, 0.40, 0.24),
+	"chest": Color(0.45, 0.32, 0.16), "drawers": Color(0.50, 0.36, 0.20),
+	"cabinet": Color(0.42, 0.30, 0.18), "furnace": Color(0.38, 0.38, 0.40),
+	"workbench": Color(0.48, 0.36, 0.22),
 	"journal": Color(0.50, 0.42, 0.55), "rusted_key": Color(0.48, 0.36, 0.28),
 	"ancient_lens": Color(0.42, 0.55, 0.60),
 }

@@ -326,6 +326,16 @@ Big systems, in build order, each its own pass:
   accidental friendly fire inside them.
 - No wipes — worlds are meant to be kept.
 
+## v0.12 status (this repo)
+Completed 0.12 — **storage & the furnace**: four container placeables with
+real synced inventories — **crate** (8 stacks, hand-craftable), **chest** (12),
+**drawers** (12), **cabinet** (16). E opens a container beside your pack:
+click your stacks to stash, click theirs to take; capacity enforced, contents
+server-tracked, persisted in saves, synced to late joiners, protected by the
+claim like any structure. **Furnace**: E with 4 wood → 2 **charcoal**, and
+**smelting now runs on charcoal** (iron bar = 2 ore + 1 charcoal) — the fuel
+economy begins. Decor units (paintings etc.) remain queued.
+
 ## v0.12a status (this repo)
 Added in v0.12a — inventory & crafting depth: **right-click context menus** on
 pack stacks (preview swatch, name, description, Hold / Bind to hotbar / Drop);

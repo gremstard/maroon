@@ -149,12 +149,16 @@ func _ready() -> void:
 			pl.set_hotbar(2, "torch")
 			pl.set_hotbar(3, "cooked_meat")
 			pl.reconcile_grid()
-			pl.hud.toggle_craft()
-			await get_tree().create_timer(0.5).timeout
-			pl.hud._refresh_pack()
-			if pl.grid_stacks.size() > 5:
-				pl.hud._open_context(5, Vector2(340, 330))
+			world.sv_place_structure("chest", pl.global_position + Vector3(1.5, 0, -1), 0.0)
 			await get_tree().create_timer(0.3).timeout
+			for s in world.get_node("Structures").get_children():
+				if s.get_meta("kind") == "chest":
+					world.sv_container_put(s.name, "iron_ore", 9)
+					world.sv_container_put(s.name, "hide", 5)
+					world.sv_container_put(s.name, "charcoal", 6)
+					await get_tree().create_timer(0.2).timeout
+					pl.hud.open_container(String(s.name))
+			await get_tree().create_timer(0.5).timeout
 		if "--shot-lev" in args:
 			world._summon_leviathan()
 			await get_tree().create_timer(4.0).timeout
@@ -779,9 +783,28 @@ func _run_smoke_test() -> void:
 	p.craft("forge")
 	ok = ok and p.crafted.has("forge")
 	world.sv_place_structure("forge", p.global_position + Vector3(2, 0, 0), 0.0)
+	world.sv_place_structure("furnace", p.global_position + Vector3(3, 0, 2), 0.0)
 	await get_tree().create_timer(0.2).timeout
+	world.sv_make_charcoal()   # smelting runs on charcoal now
+	await get_tree().create_timer(0.2).timeout
+	print("[smoke] charcoal: ", p.inv.get("charcoal", 0))
+	ok = ok and p.inv.get("charcoal", 0) >= 2
 	p.craft("iron_bar")
 	p.craft("iron_bar")
+
+	# storage: a crate takes a stack and gives it back
+	world.sv_place_structure("crate", p.global_position + Vector3(-3, 0, -2), 0.0)
+	await get_tree().create_timer(0.2).timeout
+	var crate_nodes := world.get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "crate")
+	ok = ok and crate_nodes.size() == 1
+	world.sv_container_put(crate_nodes[0].name, "stone", 7)
+	await get_tree().create_timer(0.2).timeout
+	var stored: int = crate_nodes[0].get_meta("store").get("stone", 0)
+	world.sv_container_take(crate_nodes[0].name, "stone")
+	await get_tree().create_timer(0.2).timeout
+	print("[smoke] crate: stored=%d, after take=%s" % [stored, crate_nodes[0].get_meta("store")])
+	ok = ok and stored == 7 and not crate_nodes[0].get_meta("store").has("stone")
 	p.craft("iron_spear")
 	print("[smoke] forge: bars_crafted=%s iron_spear=%s" % [p.crafted.has("iron_bar"), p.owned_tools.has("iron_spear")])
 	ok = ok and p.owned_tools.has("iron_spear")

@@ -1226,6 +1226,18 @@ func _interact() -> void:
 					hud.flash("Cooked meat over the fire.")
 			elif hud:
 				hud.flash("No raw meat to cook. Hunt a deer.")
+		elif kind in GameItems.CONTAINERS:
+			if hud:
+				hud.open_container(String(col.name))
+		elif kind == "furnace":
+			if inv.get("wood", 0) >= 4:
+				inv["wood"] -= 4
+				_world().sv_make_charcoal.rpc_id(1)
+				Sfx.play(self, "craft", -8.0)
+				if hud:
+					hud.flash("The furnace roars. 4 wood in, 2 charcoal out.")
+			elif hud:
+				hud.flash("The furnace wants 4 wood at a time.")
 		elif kind in ["door", "shutter"]:
 			_world().sv_toggle_door.rpc_id(1, String(col.name))
 		elif in_build_mode() and kind in GameItems.BUILD_PIECES:

@@ -156,6 +156,11 @@ func _build() -> void:
 	columns.add_theme_constant_override("separation", 24)
 	craft_panel.add_child(columns)
 	_build_pack_panel(columns)
+	container_box = VBoxContainer.new()
+	container_box.custom_minimum_size = Vector2(250, 0)
+	container_box.add_theme_constant_override("separation", 6)
+	container_box.visible = false
+	columns.add_child(container_box)
 	craft_list_box = VBoxContainer.new()
 	craft_list_box.visible = false
 	var cv := craft_list_box
@@ -407,6 +412,11 @@ func _on_pack_input(ev: InputEvent) -> void:
 	if ev.button_index != MOUSE_BUTTON_LEFT:
 		return
 	var cell := Vector2i(int(ev.position.x / CELL_PX), int(ev.position.y / CELL_PX))
+	if container_open != "" and _container_node() != null and _carry_idx < 0:
+		var sidx := _stack_at(cell)
+		if sidx >= 0:
+			_stash(sidx)
+			return
 	if _carry_idx >= 0 and _carry_idx < player.grid_stacks.size():
 		var s: Dictionary = player.grid_stacks[_carry_idx]
 		if player._cell_free(cell.x, cell.y, s["w"], s["h"], _carry_idx):
@@ -426,6 +436,76 @@ func _on_pack_input(ev: InputEvent) -> void:
 			return
 
 var craft_list_box: VBoxContainer = null
+var container_box: VBoxContainer = null
+var container_open := ""
+
+func open_container(sname: String) -> void:
+	container_open = sname
+	if not craft_panel.visible:
+		toggle_craft()
+	_refresh_container()
+
+func _container_node() -> Node:
+	var w := _world()
+	if w == null or container_open == "" or not w.get_node("Structures").has_node(container_open):
+		return null
+	return w.get_node("Structures").get_node(container_open)
+
+func _refresh_container() -> void:
+	if container_box == null:
+		return
+	for c in container_box.get_children():
+		c.queue_free()
+	var node := _container_node()
+	container_box.visible = node != null
+	if node == null:
+		return
+	var kind: String = node.get_meta("kind")
+	var store: Dictionary = node.get_meta("store")
+	var cap: int = GameItems.CONTAINERS[kind] * 4
+	var t := Label.new()
+	t.text = "%s — %d/%d stacks" % [GameItems.nice(kind).to_upper(), _world().container_stacks_used(store), cap]
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	container_box.add_child(t)
+	var hint := Label.new()
+	hint.text = "click your stacks to stash · click below to take"
+	hint.add_theme_font_size_override("font_size", 11)
+	hint.modulate = Color(1, 1, 1, 0.55)
+	container_box.add_child(hint)
+	if store.is_empty():
+		var e := Label.new()
+		e.text = "(empty)"
+		e.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		e.modulate = Color(1, 1, 1, 0.4)
+		container_box.add_child(e)
+	for item in store:
+		var b := Button.new()
+		b.text = "%s  ×%d   — take" % [GameItems.nice(item), store[item]]
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.add_theme_color_override("font_color", GameItems.icon_color(item).lightened(0.4))
+		var it := String(item)
+		b.pressed.connect(func() -> void:
+			_world().sv_container_take.rpc_id(1, container_open, it)
+			Sfx.play(self, "pickup", -10.0))
+		container_box.add_child(b)
+
+func _stash(idx: int) -> void:
+	var node := _container_node()
+	if node == null:
+		return
+	var s: Dictionary = player.grid_stacks[idx]
+	var kind: String = node.get_meta("kind")
+	var store: Dictionary = node.get_meta("store")
+	var after := store.duplicate()
+	after[s["item"]] = int(after.get(s["item"], 0)) + int(s["count"])
+	if _world().container_stacks_used(after) > GameItems.CONTAINERS[kind] * 4:
+		flash("The %s is full." % GameItems.nice(kind))
+		return
+	player.inv[s["item"]] = maxi(player.inv.get(s["item"], 0) - int(s["count"]), 0)
+	_world().sv_container_put.rpc_id(1, container_open, s["item"], int(s["count"]))
+	player.reconcile_grid()
+	Sfx.play(self, "place", -12.0)
+	_refresh_pack()
 
 func toggle_craft_list() -> void:
 	if not craft_panel.visible:
@@ -480,6 +560,10 @@ func toggle_craft() -> void:
 	if craft_panel.visible:
 		player.reconcile_grid()
 		_refresh_pack()
+	else:
+		container_open = ""
+		if container_box:
+			container_box.visible = false
 
 var _dmg_overlay: ColorRect
 var _was_night := false
@@ -527,6 +611,13 @@ func _process(delta: float) -> void:
 	if craft_panel.visible and _pack_refresh >= 0.4:
 		_pack_refresh = 0.0
 		_refresh_pack()
+		if container_open != "":
+			var cn := _container_node()
+			if cn == null or cn.global_position.distance_to(player.global_position) > 5.0:
+				container_open = ""
+				container_box.visible = false
+			else:
+				_refresh_container()
 
 	# compact status: essentials only — the pack (Tab) holds the details
 	var key_res: PackedStringArray = []

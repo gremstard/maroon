@@ -675,6 +675,61 @@ func rx_place_structure(sname: String, kind: String, pos: Vector3, yaw: float) -
 			tcs.height = 1.2
 			shape.shape = tcs
 			shape.position.y = 0.6
+		"crate", "chest", "drawers", "cabinet":
+			body.set_meta("hp", 150.0)
+			body.set_meta("store", {})
+			var wood_c := Color(0.50, 0.38, 0.24)
+			var dark_c := Color(0.40, 0.29, 0.17)
+			match kind:
+				"crate":
+					_piece_box(body, Vector3(0.9, 0.7, 0.9), wood_c, Vector3(0, 0.35, 0))
+					_piece_box(body, Vector3(0.95, 0.1, 0.12), dark_c, Vector3(0, 0.5, 0), false)
+				"chest":
+					_piece_box(body, Vector3(1.1, 0.65, 0.7), dark_c, Vector3(0, 0.33, 0))
+					_piece_box(body, Vector3(1.14, 0.16, 0.74), Color(0.45, 0.30, 0.16), Vector3(0, 0.62, 0), false)
+					_piece_box(body, Vector3(0.12, 0.14, 0.05), Color(0.6, 0.55, 0.35), Vector3(0, 0.42, -0.36), false)
+				"drawers":
+					_piece_box(body, Vector3(1.0, 1.0, 0.55), wood_c, Vector3(0, 0.5, 0))
+					for dy in [0.25, 0.55, 0.85]:
+						_piece_box(body, Vector3(0.85, 0.22, 0.05), dark_c, Vector3(0, dy, -0.29), false)
+						_piece_box(body, Vector3(0.16, 0.05, 0.05), Color(0.3, 0.3, 0.32), Vector3(0, dy, -0.33), false)
+				"cabinet":
+					_piece_box(body, Vector3(1.0, 1.9, 0.55), wood_c, Vector3(0, 0.95, 0))
+					_piece_box(body, Vector3(0.44, 1.7, 0.05), dark_c, Vector3(-0.24, 0.95, -0.29), false)
+					_piece_box(body, Vector3(0.44, 1.7, 0.05), dark_c, Vector3(0.24, 0.95, -0.29), false)
+		"furnace":
+			body.set_meta("hp", 250.0)
+			var fstone := _flat_mat(Color(0.36, 0.36, 0.38))
+			var fbody := MeshInstance3D.new()
+			var fbm := BoxMesh.new()
+			fbm.size = Vector3(1.2, 1.5, 1.2)
+			fbody.mesh = fbm
+			fbody.material_override = fstone
+			fbody.position.y = 0.75
+			body.add_child(fbody)
+			var mouth := MeshInstance3D.new()
+			var mbm := BoxMesh.new()
+			mbm.size = Vector3(0.5, 0.45, 0.1)
+			mouth.mesh = mbm
+			var mmat := StandardMaterial3D.new()
+			mmat.albedo_color = Color(1.0, 0.4, 0.1)
+			mmat.emission_enabled = true
+			mmat.emission = Color(1.0, 0.35, 0.05)
+			mmat.emission_energy_multiplier = 2.0
+			mouth.material_override = mmat
+			mouth.position = Vector3(0, 0.45, -0.58)
+			body.add_child(mouth)
+			var chim := MeshInstance3D.new()
+			var cbm2 := BoxMesh.new()
+			cbm2.size = Vector3(0.4, 0.8, 0.4)
+			chim.mesh = cbm2
+			chim.material_override = fstone
+			chim.position = Vector3(0, 1.9, 0.25)
+			body.add_child(chim)
+			var fcs := BoxShape3D.new()
+			fcs.size = Vector3(1.2, 2.3, 1.2)
+			shape.shape = fcs
+			shape.position.y = 1.15
 		"workbench":
 			body.set_meta("hp", 200.0)
 			var top := MeshInstance3D.new()
@@ -1263,6 +1318,72 @@ func sv_repair(sname: String) -> void:
 	var s := holder.get_node(sname)
 	rx_struct_hp.rpc(sname, minf(float(s.get_meta("hp")) + 40.0, 400.0))
 
+# ================================================================ storage & furnace
+
+func container_stacks_used(store: Dictionary) -> int:
+	var used := 0
+	for item in store:
+		used += ceili(float(store[item]) / GameItems.stack_max(item))
+	return used
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_container_put(sname: String, item: String, count: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var holder := get_node("Structures")
+	if not holder.has_node(sname) or count <= 0:
+		return
+	var s := holder.get_node(sname)
+	var kind: String = s.get_meta("kind")
+	if kind not in GameItems.CONTAINERS:
+		return
+	var store: Dictionary = s.get_meta("store")
+	store[item] = int(store.get(item, 0)) + count
+	if container_stacks_used(store) > GameItems.CONTAINERS[kind] * 4:
+		store[item] -= count   # over capacity — bounce it back
+		if store[item] <= 0:
+			store.erase(item)
+		_grant_items(multiplayer.get_remote_sender_id() if multiplayer.get_remote_sender_id() != 0 else 1, {item: count})
+		return
+	rx_container_store.rpc(sname, store)
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_container_take(sname: String, item: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender == 0:
+		sender = 1
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	var store: Dictionary = s.get_meta("store")
+	if not store.has(item):
+		return
+	var count: int = mini(int(store[item]), GameItems.stack_max(item))
+	store[item] -= count
+	if store[item] <= 0:
+		store.erase(item)
+	rx_container_store.rpc(sname, store)
+	_grant_items(sender, {item: count})
+
+@rpc("authority", "call_local", "reliable")
+func rx_container_store(sname: String, store: Dictionary) -> void:
+	var holder := get_node("Structures")
+	if holder.has_node(sname):
+		holder.get_node(sname).set_meta("store", store)
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_make_charcoal() -> void:
+	# The client already burned its 4 wood; the furnace answers with charcoal.
+	if not multiplayer.is_server():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender == 0:
+		sender = 1
+	_grant_items(sender, {"charcoal": 2})
+
 # ================================================================ the sea cave
 
 var cave_pos := Vector3.ZERO
@@ -1475,6 +1596,8 @@ func save_now() -> void:
 		}
 		if s.get_meta("kind") == "totem":
 			e["stock"] = int(s.get_meta("stock"))
+		if s.get_meta("kind") in GameItems.CONTAINERS:
+			e["store"] = s.get_meta("store")
 		structs.append(e)
 	var res := {}
 	for r in get_node("Resources").get_children():
@@ -1513,6 +1636,12 @@ func _load_save() -> bool:
 		rx_struct_hp(e["name"], float(e["hp"]))
 		if e["kind"] == "totem":
 			rx_totem_stock(e["name"], int(e.get("stock", 0)))
+		if e["kind"] in GameItems.CONTAINERS:
+			var st: Dictionary = e.get("store", {})
+			var clean := {}
+			for k in st:
+				clean[String(k)] = int(st[k])
+			rx_container_store(e["name"], clean)
 	for rname in data.get("res", {}):
 		rx_resource_hp(rname, float(data["res"][rname]))
 	for cname in data.get("looted", []):
@@ -1636,6 +1765,8 @@ func sync_to(peer: int) -> void:
 		rx_struct_hp.rpc_id(peer, s.name, s.get_meta("hp"))
 		if s.get_meta("kind") == "totem":
 			rx_totem_stock.rpc_id(peer, s.name, int(s.get_meta("stock")))
+		if s.get_meta("kind") in GameItems.CONTAINERS:
+			rx_container_store.rpc_id(peer, String(s.name), s.get_meta("store"))
 	for r in get_node("Resources").get_children():
 		var hp: float = r.get_meta("hp")
 		if hp < GameItems.RES_STATS[r.get_meta("kind")]["hp"]:
