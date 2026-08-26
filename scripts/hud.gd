@@ -373,6 +373,16 @@ func _open_context(idx: int, at: Vector2) -> void:
 		if ctx_menu:
 			ctx_menu.queue_free()
 			ctx_menu = null
+	if item in GameItems.CLOTHES:
+		var wear := Button.new()
+		wear.text = "Wear"
+		wear.pressed.connect(func() -> void:
+			player.equipment[GameItems.CLOTHES[item]["gear_slot"]] = item
+			player.rx_equip.rpc(player.equipment)
+			flash("Wearing %s." % GameItems.nice(item))
+			close.call()
+			_refresh_pack())
+		v.add_child(wear)
 	if item in GameItems.PLACEABLES or GameItems.hotbar_eligible(item):
 		var hold := Button.new()
 		hold.text = "Hold"

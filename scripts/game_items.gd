@@ -19,6 +19,19 @@ const RECIPES := {
 	"totem":      {"wood": 20, "stone": 10},
 	"forge":      {"stone": 20, "wood": 10},
 	"beacon":     {"wood": 10, "iron_ore": 3, "string": 2, "ancient_lens": 1},
+	# -------- cloth & dye: grass -> string -> cloth -> dye -> a shirt that's YOURS
+	"cloth":      {"string": 3},
+	"red_dye":    {"berries": 4},
+	"yellow_dye": {"fiber": 6},
+	"black_dye":  {"charcoal": 2},
+	"shirt_red":    {"cloth": 2, "string": 1, "red_dye": 1},
+	"shirt_yellow": {"cloth": 2, "string": 1, "yellow_dye": 1},
+	"shirt_black":  {"cloth": 2, "string": 1, "black_dye": 1},
+	"pants_red":    {"cloth": 2, "string": 1, "red_dye": 1},
+	"pants_yellow": {"cloth": 2, "string": 1, "yellow_dye": 1},
+	"pants_black":  {"cloth": 2, "string": 1, "black_dye": 1},
+	"painting":   {"wood": 4, "cloth": 1},
+	"lamp":       {"iron_bar": 2, "string": 1},
 	# -------- clothing: fiber tier (craft anywhere)
 	"fiber_cap":      {"fiber": 4, "string": 1},
 	"fiber_tunic":    {"fiber": 8, "string": 2},
@@ -62,18 +75,20 @@ const BCELL := 3.0
 const BWALL_H := 2.6
 
 const PLACEABLES := ["torch", "campfire", "workbench", "crate", "chest",
-	"drawers", "cabinet", "furnace", "totem", "forge", "beacon"]
+	"drawers", "cabinet", "furnace", "totem", "forge", "beacon",
+	"lamp", "painting"]
 
 # Storage: rows of a 4-wide grid; a container holds that many stacks.
 const CONTAINERS := {"crate": 2, "chest": 3, "drawers": 3, "cabinet": 4}
-const MATERIALS := ["string", "iron_bar"]   # crafted items that go back into the inventory
+const MATERIALS := ["string", "iron_bar", "cloth", "red_dye", "yellow_dye", "black_dye"]
 
 # What you can make with cold hands and a flat rock. Everything else needs
 # a station — the workbench for real carpentry, the forge for metal.
 const HAND_RECIPES := ["string", "crude_axe", "crude_pick", "spear",
-	"torch", "campfire", "hammer", "workbench", "crate"]
+	"torch", "campfire", "hammer", "workbench", "crate",
+	"red_dye", "yellow_dye", "black_dye"]
 const FORGE_ONLY := ["iron_bar", "iron_axe", "iron_pick", "iron_spear",
-	"iron_helm", "iron_chest", "scale_helm", "scale_chest"]
+	"iron_helm", "iron_chest", "scale_helm", "scale_chest", "lamp"]
 
 static func station_for(recipe: String) -> String:
 	if recipe in FORGE_ONLY:
@@ -109,6 +124,12 @@ const DESCRIPTIONS := {
 	"drawers": "Neat little compartments. 12 stacks.",
 	"cabinet": "The good furniture. 16 stacks.",
 	"furnace": "Burns wood into charcoal (E with 4 wood). Fuel for the forge.",
+	"cloth": "Woven from string. Dye it, wear it.",
+	"red_dye": "Crushed berries. For cloth worth wearing.",
+	"yellow_dye": "Dry grass, boiled down to its color.",
+	"black_dye": "Charcoal, ground fine.",
+	"painting": "Every one comes out different. Hang it on a wall.",
+	"lamp": "Iron-caged light. No flame, no fire risk — and it glows from your pack.",
 	"totem": "Claims this ground. Feed it wood or the rot returns.",
 	"forge": "Ore goes in. Iron comes out. Stand close to work it.",
 	"beacon": "Needs the peak. Calls across the sea.",
@@ -141,6 +162,12 @@ const CLOTHES := {
 	"hide_coat":      {"gear_slot": "torso", "armor": 0.15, "tier": "hide"},
 	"hide_pants":     {"gear_slot": "legs",  "armor": 0.11, "tier": "hide"},
 	"hide_pack":      {"gear_slot": "back",  "armor": 0.0,  "carry": 90, "tier": "hide"},
+	"shirt_red":    {"gear_slot": "torso", "armor": 0.05, "tier": "cloth", "color": Color(0.65, 0.20, 0.22)},
+	"shirt_yellow": {"gear_slot": "torso", "armor": 0.05, "tier": "cloth", "color": Color(0.85, 0.72, 0.25)},
+	"shirt_black":  {"gear_slot": "torso", "armor": 0.05, "tier": "cloth", "color": Color(0.16, 0.16, 0.18)},
+	"pants_red":    {"gear_slot": "legs", "armor": 0.04, "tier": "cloth", "color": Color(0.55, 0.17, 0.19)},
+	"pants_yellow": {"gear_slot": "legs", "armor": 0.04, "tier": "cloth", "color": Color(0.72, 0.60, 0.22)},
+	"pants_black":  {"gear_slot": "legs", "armor": 0.04, "tier": "cloth", "color": Color(0.13, 0.13, 0.15)},
 	"iron_helm":      {"gear_slot": "head",  "armor": 0.12, "tier": "iron"},
 	"iron_chest":     {"gear_slot": "torso", "armor": 0.22, "tier": "iron"},
 	"scale_helm":     {"gear_slot": "head",  "armor": 0.16, "tier": "scale"},
@@ -150,8 +177,9 @@ const CLOTHES := {
 # Material ladder, low -> high. Rarity vs power is a gradual slope, never
 # exponential: full best-in-slot armor caps at 50% reduction (~2x survival),
 # mirroring "top tier vs unarmoured is 3 hits, not 1".
-const TIERS := ["fiber", "hide", "iron", "scale"]
+const TIERS := ["fiber", "cloth", "hide", "iron", "scale"]
 const TIER_COLORS := {
+	"cloth": Color(0.82, 0.78, 0.68),
 	"fiber": Color(0.72, 0.72, 0.72),
 	"hide":  Color(0.49, 0.76, 0.51),
 	"iron":  Color(0.50, 0.70, 0.90),
@@ -174,6 +202,11 @@ const NICE_NAMES := {
 	"hide": "Hide", "iron_bar": "Iron Bar", "forge": "Forge",
 	"torch": "Torch", "moonstone": "Moonstone", "raft": "Raft",
 	"hammer": "Hammer", "workbench": "Workbench", "charcoal": "Charcoal",
+	"cloth": "Cloth", "red_dye": "Red Dye", "yellow_dye": "Yellow Dye",
+	"black_dye": "Black Dye", "shirt_red": "Red Shirt",
+	"shirt_yellow": "Yellow Shirt", "shirt_black": "Black Shirt",
+	"pants_red": "Red Pants", "pants_yellow": "Yellow Pants",
+	"pants_black": "Black Pants", "painting": "Painting", "lamp": "Iron Lamp",
 	"crate": "Crate", "chest": "Chest", "drawers": "Drawers",
 	"cabinet": "Cabinet", "furnace": "Furnace",
 	"foundation": "Foundation", "floor": "Floor",
@@ -231,6 +264,8 @@ const STACK_MAX := {
 	"torch": 10, "campfire": 3, "wall": 5, "totem": 2, "forge": 2, "beacon": 2,
 	"charcoal": 20, "crate": 3, "chest": 3, "drawers": 2, "cabinet": 2,
 	"furnace": 2, "workbench": 2,
+	"cloth": 20, "red_dye": 10, "yellow_dye": 10, "black_dye": 10,
+	"lamp": 2, "painting": 3,
 }
 
 static func stack_max(item: String) -> int:

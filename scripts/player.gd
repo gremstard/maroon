@@ -414,6 +414,7 @@ func _survival_tick(delta: float) -> void:
 	reconcile_grid()
 	# a held torch pushes back the night (and the dwellers)
 	var torch_out: bool = held_item() == "torch" and inv.get("torch", 0) > 0
+	_set_lamp(inv.get("lamp", 0) > 0)
 	if torch_out and _torch_light == null:
 		_torch_light = OmniLight3D.new()
 		_torch_light.light_color = Color(1.0, 0.7, 0.3)
@@ -891,6 +892,34 @@ func _swing_feel(hit_sound: String, hit_pos: Variant) -> void:
 var _held: Node3D = null
 
 var held_net := ""   # what this survivor is holding, as others know it
+var lamp_net := false
+var _lamp_glow: OmniLight3D = null
+
+func _set_lamp(on: bool) -> void:
+	# The iron lamp glows from inside your pack. No flame. No fear.
+	if on == lamp_net and (_lamp_glow != null) == on:
+		if _lamp_glow:
+			_lamp_glow.visible = on
+		return
+	var changed := on != lamp_net
+	lamp_net = on
+	if _lamp_glow == null and on:
+		_lamp_glow = OmniLight3D.new()
+		_lamp_glow.light_color = Color(1.0, 0.88, 0.6)
+		_lamp_glow.omni_range = 6.0
+		_lamp_glow.light_energy = 0.9
+		_lamp_glow.position.y = 1.4
+		add_child(_lamp_glow)
+	if _lamp_glow:
+		_lamp_glow.visible = on
+	if changed and is_local() and multiplayer.multiplayer_peer != null:
+		rx_lamp.rpc(on)
+
+@rpc("any_peer", "call_remote", "reliable")
+func rx_lamp(on: bool) -> void:
+	if multiplayer.get_remote_sender_id() != peer_id:
+		return
+	_set_lamp(on)
 
 @rpc("any_peer", "call_remote", "reliable")
 func rx_tool(tool: String) -> void:
@@ -1023,13 +1052,15 @@ func _refresh_gear_visuals() -> void:
 		return
 	var torso_c := _skin_color   # bare until dressed
 	if equipment.has("torso"):
-		torso_c = GameItems.TIER_COLORS[GameItems.CLOTHES[equipment["torso"]]["tier"]]
+		var tc: Dictionary = GameItems.CLOTHES[equipment["torso"]]
+		torso_c = tc.get("color", GameItems.TIER_COLORS[tc["tier"]])
 	_shirt.material_override.albedo_color = torso_c
 	for arm in [_arm_l, _arm_r]:
 		arm.get_node("sleeve").material_override.albedo_color = torso_c
 	var legs_c := _skin_color
 	if equipment.has("legs"):
-		legs_c = GameItems.TIER_COLORS[GameItems.CLOTHES[equipment["legs"]]["tier"]].darkened(0.25)
+		var lc: Dictionary = GameItems.CLOTHES[equipment["legs"]]
+		legs_c = lc.get("color", GameItems.TIER_COLORS[lc["tier"]].darkened(0.25))
 	for lm in _leg_mats:
 		lm.albedo_color = legs_c
 	for boot in _boots:
@@ -1070,9 +1101,53 @@ func _use_selected() -> void:
 		_eat(held)
 		return
 	if held in GameItems.PLACEABLES:
+		if held == "torch" and _raycast().is_empty():
+			_throw_torch()   # too far to plant? throw it
+			return
 		_place(held)
 		return
 	_swing()   # tools and bare hands
+
+func _throw_torch() -> void:
+	if inv.get("torch", 0) <= 0:
+		return
+	var from := cam.global_position
+	var dir := -cam.global_transform.basis.z
+	var q := PhysicsRayQueryParameters3D.create(from, from + dir * 26.0)
+	q.exclude = [get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		if hud:
+			hud.flash("Nothing out there for it to land on.")
+		return
+	inv["torch"] -= 1
+	Sfx.play(self, "whoosh", -6.0)
+	var target: Vector3 = hit["position"]
+	var proj := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.08, 0.34, 0.08)
+	proj.mesh = bm
+	var pmat := StandardMaterial3D.new()
+	pmat.albedo_color = Color(1.0, 0.6, 0.2)
+	pmat.emission_enabled = true
+	pmat.emission = Color(1.0, 0.55, 0.1)
+	pmat.emission_energy_multiplier = 2.0
+	proj.material_override = pmat
+	_world().add_child(proj)
+	proj.global_position = from + dir * 0.6
+	var w := _world()
+	var tw := create_tween()
+	tw.tween_method(func(t: float) -> void:
+		if is_instance_valid(proj):
+			var p := from.lerp(target, t)
+			p.y += sin(t * PI) * 2.5
+			proj.global_position = p
+			proj.rotation.x += 0.35
+	, 0.0, 1.0, 0.5)
+	tw.tween_callback(func() -> void:
+		if is_instance_valid(proj):
+			proj.queue_free()
+		w.sv_place_structure.rpc_id(1, "torch", target, randf() * TAU))
 
 func _swing() -> void:
 	if swing_cooldown > 0.0:
@@ -1167,6 +1242,18 @@ func _place(kind: String) -> void:
 			hud.flash("Aim at the ground, closer.")
 		return
 	var pos: Vector3 = hit["position"]
+	if kind == "painting":
+		var col2: Object = hit["collider"]
+		var wallish: bool = col2 is Node and col2.has_meta("struct") \
+			and col2.get_meta("kind") in ["wall", "doorway", "window", "half_wall", "gable"]
+		if not wallish:
+			if hud:
+				hud.flash("Paintings hang on walls.")
+			return
+		var n: Vector3 = hit["normal"]
+		inv[kind] -= 1
+		_world().sv_place_structure.rpc_id(1, kind, pos + n * 0.06, atan2(-n.x, -n.z))
+		return
 	if kind == "beacon":
 		var peak: Vector3 = _world().peak_pos
 		if Vector2(pos.x - peak.x, pos.z - peak.z).length() >= 15.0:
@@ -1294,6 +1381,7 @@ func craft(recipe: String) -> void:
 	Sfx.play(self, "craft", -8.0)
 	_auto_hotbar(recipe)
 	if recipe in GameItems.CLOTHES:
+		inv[recipe] = inv.get(recipe, 0) + 1   # into the pack either way
 		_try_equip(recipe)
 	elif recipe in GameItems.MATERIALS:
 		inv[recipe] = inv.get(recipe, 0) + 1

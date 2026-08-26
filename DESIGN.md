@@ -326,6 +326,21 @@ Big systems, in build order, each its own pass:
   accidental friendly fire inside them.
 - No wipes — worlds are meant to be kept.
 
+## v0.13 status (this repo)
+Added in 0.13 — **cloth, dye, fire & light**: the realism chain lands — string
+→ **cloth** (workbench) → **dyes** (berries=red, dry grass=yellow,
+charcoal=black) → **colored shirts & pants**, rendered in their dye color on
+your rig; clothing now always goes to the pack and a **Wear** action in the
+context menu equips anything manually. **Lighting overhaul complete**:
+torches are **throwable** (arc through the night, plant where they land),
+open flames can **ignite nearby woodwork** (burning pieces take damage; put
+distance between your torch line and your walls) and campfires **burn you**
+if you stand in them; the **Iron Lamp** (forged) has no flame, no risk, is
+placeable as a lamppost, and **glows from inside your pack** — dwellers
+respect it. **Paintings**: hang on walls; every one generates unique art
+from its own seed. Also fixed: crafted clothing that wasn't an upgrade used
+to vanish.
+
 ## v0.12 status (this repo)
 Completed 0.12 — **storage & the furnace**: four container placeables with
 real synced inventories — **crate** (8 stacks, hand-craftable), **chest** (12),

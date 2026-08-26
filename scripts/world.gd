@@ -697,6 +697,51 @@ func rx_place_structure(sname: String, kind: String, pos: Vector3, yaw: float) -
 					_piece_box(body, Vector3(1.0, 1.9, 0.55), wood_c, Vector3(0, 0.95, 0))
 					_piece_box(body, Vector3(0.44, 1.7, 0.05), dark_c, Vector3(-0.24, 0.95, -0.29), false)
 					_piece_box(body, Vector3(0.44, 1.7, 0.05), dark_c, Vector3(0.24, 0.95, -0.29), false)
+		"lamp":
+			body.set_meta("hp", 120.0)
+			var post := MeshInstance3D.new()
+			var pcm := CylinderMesh.new()
+			pcm.top_radius = 0.05
+			pcm.bottom_radius = 0.08
+			pcm.height = 1.6
+			post.mesh = pcm
+			post.material_override = _flat_mat(Color(0.30, 0.32, 0.36))
+			post.position.y = 0.8
+			body.add_child(post)
+			var cage := MeshInstance3D.new()
+			var cgm := BoxMesh.new()
+			cgm.size = Vector3(0.3, 0.34, 0.3)
+			cage.mesh = cgm
+			var lmat := StandardMaterial3D.new()
+			lmat.albedo_color = Color(1.0, 0.9, 0.6)
+			lmat.emission_enabled = true
+			lmat.emission = Color(1.0, 0.85, 0.5)
+			lmat.emission_energy_multiplier = 2.5
+			cage.material_override = lmat
+			cage.position.y = 1.75
+			body.add_child(cage)
+			var llight := OmniLight3D.new()
+			llight.light_color = Color(1.0, 0.88, 0.6)
+			llight.omni_range = 9.0
+			llight.light_energy = 1.5
+			llight.position.y = 1.75
+			body.add_child(llight)
+			var lcs := CylinderShape3D.new()
+			lcs.radius = 0.12
+			lcs.height = 1.9
+			shape.shape = lcs
+			shape.position.y = 0.95
+		"painting":
+			body.set_meta("hp", 40.0)
+			var art_rng := RandomNumberGenerator.new()
+			art_rng.seed = sname.hash()
+			_piece_box(body, Vector3(0.9, 0.7, 0.06), Color(0.32, 0.22, 0.12), Vector3(0, 0, 0))
+			var canvas_c := Color.from_hsv(art_rng.randf(), 0.3, 0.85)
+			_piece_box(body, Vector3(0.78, 0.58, 0.03), canvas_c, Vector3(0, 0, -0.03), false)
+			for k in art_rng.randi_range(3, 6):
+				var blob := Color.from_hsv(art_rng.randf(), art_rng.randf_range(0.4, 0.8), art_rng.randf_range(0.4, 0.9))
+				_piece_box(body, Vector3(art_rng.randf_range(0.08, 0.4), art_rng.randf_range(0.08, 0.35), 0.015),
+					blob, Vector3(art_rng.randf_range(-0.28, 0.28), art_rng.randf_range(-0.2, 0.2), -0.05), false)
 		"furnace":
 			body.set_meta("hp", 250.0)
 			var fstone := _flat_mat(Color(0.36, 0.36, 0.38))
@@ -1318,6 +1363,78 @@ func sv_repair(sname: String) -> void:
 	var s := holder.get_node(sname)
 	rx_struct_hp.rpc(sname, minf(float(s.get_meta("hp")) + 40.0, 400.0))
 
+# ================================================================ fire
+
+var _fire_accum := 0.0
+
+func _fire_tick() -> void:
+	# Open flames are useful and dangerous — that's the deal.
+	var structs := get_node("Structures").get_children()
+	for s in structs:
+		var kind: String = s.get_meta("kind")
+		if kind in ["torch", "campfire"]:
+			for t in structs:
+				if t.get_meta("kind") in GameItems.BUILD_PIECES \
+						and not t.get_meta("burning", false) \
+						and t.global_position.distance_to(s.global_position) < 2.4 \
+						and randf() < 0.015:
+					rx_ignite.rpc(String(t.name))
+			if kind == "campfire":
+				for p in get_node("Players").get_children():
+					if p.global_position.distance_to(s.global_position) < 0.9:
+						p.rx_damage.rpc_id(p.peer_id, 4.0)
+	for s in structs:
+		if s.get_meta("burning", false):
+			var bt: float = float(s.get_meta("burn_t")) - 2.0
+			s.set_meta("burn_t", bt)
+			rx_struct_hp.rpc(String(s.name), float(s.get_meta("hp")) - 9.0)
+			if bt <= 0.0 and get_node("Structures").has_node(String(s.name)):
+				rx_extinguish.rpc(String(s.name))
+
+@rpc("authority", "call_local", "reliable")
+func rx_ignite(sname: String) -> void:
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	if s.get_meta("burning", false):
+		return
+	s.set_meta("burning", true)
+	s.set_meta("burn_t", 10.0)
+	var fx := Node3D.new()
+	fx.name = "FireFx"
+	var flame := MeshInstance3D.new()
+	var fm := SphereMesh.new()
+	fm.radius = 0.35
+	fm.height = 0.7
+	flame.mesh = fm
+	var fmat := StandardMaterial3D.new()
+	fmat.albedo_color = Color(1.0, 0.5, 0.1, 0.85)
+	fmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	fmat.emission_enabled = true
+	fmat.emission = Color(1.0, 0.45, 0.05)
+	fmat.emission_energy_multiplier = 3.0
+	flame.material_override = fmat
+	flame.position.y = 1.2
+	fx.add_child(flame)
+	var fl := OmniLight3D.new()
+	fl.light_color = Color(1.0, 0.5, 0.15)
+	fl.omni_range = 6.0
+	fl.position.y = 1.2
+	fx.add_child(fl)
+	s.add_child(fx)
+	Sfx.play_at(self, s.global_position, "roar", -16.0)
+
+@rpc("authority", "call_local", "reliable")
+func rx_extinguish(sname: String) -> void:
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	s.set_meta("burning", false)
+	if s.has_node("FireFx"):
+		s.get_node("FireFx").queue_free()
+
 # ================================================================ storage & furnace
 
 func container_stacks_used(store: Dictionary) -> int:
@@ -1467,11 +1584,11 @@ func light_near(pos: Vector3, radius: float) -> bool:
 	# Is there a burning structure — or a survivor gripping a torch —
 	# close enough to hold the dark back?
 	for s in get_node("Structures").get_children():
-		if s.get_meta("kind") in ["torch", "campfire", "beacon"] \
+		if s.get_meta("kind") in ["torch", "campfire", "beacon", "lamp"] \
 				and s.global_position.distance_to(pos) < radius:
 			return true
 	for p in get_node("Players").get_children():
-		if p.held_net == "torch" and p.global_position.distance_to(pos) < radius:
+		if (p.held_net == "torch" or p.lamp_net) and p.global_position.distance_to(pos) < radius:
 			return true
 	return false
 
@@ -1679,6 +1796,10 @@ func _process(delta: float) -> void:
 			_time_sync_accum = 0.0
 			rx_time.rpc(time_of_day, day)
 		_decay_tick(delta)
+		_fire_accum += delta
+		if _fire_accum >= 2.0:
+			_fire_accum = 0.0
+			_fire_tick()
 		_save_accum += delta
 		if _save_accum >= 60.0:
 			_save_accum = 0.0

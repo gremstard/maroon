@@ -74,9 +74,9 @@ func _ready() -> void:
 				if a.global_position.distance_to(pl.global_position) < 15.0:
 					a.queue_free()
 			var fits: Array = [
-				{},   # fresh castaway: face, hair, id-colored clothes
-				{"head": "hide_hood", "torso": "hide_coat", "legs": "hide_pants", "back": "hide_pack"},
-				{"head": "scale_helm", "torso": "scale_chest", "legs": "fiber_leggings", "back": "woven_pack"},
+				{"torso": "shirt_yellow", "legs": "pants_red"},
+				{"head": "hide_hood", "torso": "shirt_red", "legs": "pants_black", "back": "hide_pack"},
+				{"head": "scale_helm", "torso": "scale_chest", "legs": "pants_yellow", "back": "woven_pack"},
 			]
 			for i in fits.size():
 				_spawn_player(900 + i)
@@ -931,6 +931,48 @@ func _run_smoke_test() -> void:
 	await get_tree().create_timer(0.2).timeout
 	print("[smoke] demolish: refund=%d wood" % [p.inv.get("wood", 0) - pre_wood])
 	ok = ok and p.inv.get("wood", 0) == pre_wood + 2
+
+	# cloth & dye: dry grass all the way to a yellow shirt
+	world.sv_place_structure("workbench", p.global_position + Vector3(3, 0, -3), 0.0)
+	await get_tree().create_timer(0.2).timeout
+	p.inv["fiber"] = 20
+	p.inv["string"] = p.inv.get("string", 0) + 9
+	p.craft("yellow_dye")
+	p.craft("cloth")
+	p.craft("cloth")
+	p.craft("shirt_yellow")
+	var has_shirt: bool = p.inv.get("shirt_yellow", 0) >= 1 or p.equipment.get("torso", "") == "shirt_yellow"
+	print("[smoke] dye chain: yellow shirt made=%s" % has_shirt)
+	ok = ok and has_shirt
+
+	# iron lamp: forged, then glows from the pack
+	world.sv_place_structure("forge", p.global_position + Vector3(-4, 0, 4), 0.0)
+	await get_tree().create_timer(0.2).timeout
+	p.inv["iron_bar"] = p.inv.get("iron_bar", 0) + 2
+	p.inv["string"] = p.inv.get("string", 0) + 1
+	p.craft("lamp")
+	await get_tree().create_timer(0.5).timeout
+	print("[smoke] lamp: owned=%d glowing=%s" % [p.inv.get("lamp", 0), p.lamp_net])
+	ok = ok and p.inv.get("lamp", 0) == 1 and p.lamp_net
+
+	# fire: an ignited wall burns down over the fire tick
+	var burn_walls := world.get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "wall")
+	ok = ok and burn_walls.size() >= 1
+	var bw: Node = burn_walls[0]
+	var wall_hp0: float = bw.get_meta("hp")
+	world.rx_ignite(String(bw.name))
+	world._fire_tick()
+	await get_tree().create_timer(0.2).timeout
+	print("[smoke] fire: wall hp %.0f -> %.0f, burning=%s" % [wall_hp0, bw.get_meta("hp"), bw.get_meta("burning")])
+	ok = ok and float(bw.get_meta("hp")) < wall_hp0 and bw.get_meta("burning") == true
+
+	# painting on that wall
+	world.sv_place_structure("painting", bw.global_position + Vector3(0, 1.3, 0.2), 0.0)
+	await get_tree().create_timer(0.2).timeout
+	ok = ok and world.get_node("Structures").get_children().any(
+		func(s): return s.get_meta("kind") == "painting")
+
 	var totem := world.get_node("Structures").get_children().filter(
 		func(s): return s.get_meta("kind") == "totem")
 	ok = ok and totem.size() == 1
