@@ -945,10 +945,48 @@ func _run_smoke_test() -> void:
 	world.sv_place_structure("forge", p.global_position + Vector3(2, 0, 0), 0.0)
 	world.sv_place_structure("furnace", p.global_position + Vector3(3, 0, 2), 0.0)
 	await get_tree().create_timer(0.2).timeout
-	world.sv_make_charcoal()   # smelting runs on charcoal now
+	# furnace attention economy: load, light, watch, pull — or ash
+	var furn: Node = world.get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "furnace").back()
+	p.inv["wood"] = p.inv.get("wood", 0) + 10
+	p.inv["wood"] -= 10
+	world.sv_smelter_load(furn.name, 10)
+	world.sv_furnace_light(furn.name, true)
+	world._smelter_tick(9.0)   # batch done -> pull window opens
+	ok = ok and float(furn.get_meta("ready_t")) > 0.0
+	world.sv_furnace_pull(furn.name)
 	await get_tree().create_timer(0.2).timeout
-	print("[smoke] charcoal: ", p.inv.get("charcoal", 0))
 	ok = ok and p.inv.get("charcoal", 0) >= 2
+	world._smelter_tick(9.0)   # next batch ready...
+	world._smelter_tick(6.0)   # ...window missed -> ash
+	var furn_out: Dictionary = furn.get_meta("out")
+	print("[smoke] furnace: charcoal=%d ash_from_neglect=%d" % [p.inv.get("charcoal", 0), furn_out.get("ash", 0)])
+	ok = ok and int(furn_out.get("ash", 0)) >= 1
+	world.sv_furnace_light(furn.name, false)
+	# range: set it and forget it
+	world.sv_place_structure("range", p.global_position + Vector3(4, 0, 3), 0.0)
+	await get_tree().create_timer(0.2).timeout
+	var rng_stove: Node = world.get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "range").back()
+	world.sv_smelter_load(rng_stove.name, 4)
+	world.sv_range_start(rng_stove.name, 2)
+	world._smelter_tick(4.5)
+	world._smelter_tick(4.5)
+	var range_out: Dictionary = rng_stove.get_meta("out")
+	world.sv_smelter_collect(rng_stove.name)
+	await get_tree().create_timer(0.2).timeout
+	print("[smoke] range: out_was=%d charcoal_now=%d" % [range_out.get("charcoal", 0), p.inv.get("charcoal", 0)])
+	ok = ok and int(range_out.get("charcoal", 0)) == 2
+	# salvage: a chair comes home whole
+	world.sv_place_structure("chair", p.global_position + Vector3(-2, 0, -2), 0.0)
+	await get_tree().create_timer(0.2).timeout
+	var chair: Node = world.get_node("Structures").get_children().filter(
+		func(s): return s.get_meta("kind") == "chair").back()
+	world.sv_salvage(chair.name)
+	await get_tree().create_timer(0.2).timeout
+	print("[smoke] salvage: chair_item=%d chair_gone=%s" % [p.inv.get("chair", 0),
+		not world.get_node("Structures").get_children().any(func(s): return s.get_meta("kind") == "chair")])
+	ok = ok and p.inv.get("chair", 0) == 1
 	p.craft("iron_bar")
 	p.craft("iron_bar")
 

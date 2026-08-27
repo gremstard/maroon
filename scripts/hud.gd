@@ -165,6 +165,11 @@ func _build() -> void:
 	container_box.add_theme_constant_override("separation", 6)
 	container_box.visible = false
 	columns.add_child(container_box)
+	smelter_box = VBoxContainer.new()
+	smelter_box.custom_minimum_size = Vector2(250, 0)
+	smelter_box.add_theme_constant_override("separation", 6)
+	smelter_box.visible = false
+	columns.add_child(smelter_box)
 	craft_list_box = VBoxContainer.new()
 	craft_list_box.visible = false
 	var cv := craft_list_box
@@ -521,6 +526,109 @@ func _stash(idx: int) -> void:
 	Sfx.play(self, "place", -12.0)
 	_refresh_pack()
 
+var smelter_box: VBoxContainer = null
+var smelter_open := ""
+
+func open_smelter(sname: String) -> void:
+	smelter_open = sname
+	if not craft_panel.visible:
+		toggle_craft()
+	_refresh_smelter()
+
+func _smelter_node() -> Node:
+	var w := _world()
+	if w == null or smelter_open == "" or not w.get_node("Structures").has_node(smelter_open):
+		return null
+	return w.get_node("Structures").get_node(smelter_open)
+
+func _refresh_smelter() -> void:
+	if smelter_box == null:
+		return
+	for c in smelter_box.get_children():
+		c.queue_free()
+	var node := _smelter_node()
+	smelter_box.visible = node != null
+	if node == null:
+		return
+	var kind: String = node.get_meta("kind")
+	var fuel: int = node.get_meta("fuel", 0)
+	var burning: bool = node.get_meta("burning", false)
+	var ready_t: float = node.get_meta("ready_t", 0.0)
+	var out: Dictionary = node.get_meta("out", {})
+	var t := Label.new()
+	t.text = "%s — fuel: %d wood" % [GameItems.nice(kind).to_upper(), fuel]
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	smelter_box.add_child(t)
+	var load_btn := Button.new()
+	var can_load: int = mini(player.inv.get("wood", 0), 10)
+	load_btn.text = "Load %d wood" % can_load
+	load_btn.disabled = can_load <= 0
+	load_btn.pressed.connect(func() -> void:
+		player.inv["wood"] -= can_load
+		_world().sv_smelter_load.rpc_id(1, smelter_open, can_load)
+		_refresh_smelter())
+	smelter_box.add_child(load_btn)
+	if kind == "furnace":
+		var warn := Label.new()
+		warn.text = "Watch it. Pull each batch or it's ash.\nEsc doesn't put fires out."
+		warn.add_theme_font_size_override("font_size", 11)
+		warn.modulate = Color(1, 0.8, 0.6)
+		smelter_box.add_child(warn)
+		if ready_t > 0.0:
+			var pull := Button.new()
+			pull.text = "⚠ PULL THE BATCH (%.1fs)" % ready_t
+			pull.modulate = Color(1.0, 0.7, 0.3)
+			pull.pressed.connect(func() -> void:
+				_world().sv_furnace_pull.rpc_id(1, smelter_open)
+				Sfx.play(self, "pickup", -4.0))
+			smelter_box.add_child(pull)
+		elif burning:
+			var bar := ProgressBar.new()
+			bar.min_value = 0
+			bar.max_value = _world().BATCH_TIME
+			bar.value = float(node.get_meta("batch_t", 0.0))
+			bar.show_percentage = false
+			bar.custom_minimum_size = Vector2(0, 16)
+			smelter_box.add_child(bar)
+			var off := Button.new()
+			off.text = "Put it out"
+			off.pressed.connect(func() -> void:
+				_world().sv_furnace_light.rpc_id(1, smelter_open, false))
+			smelter_box.add_child(off)
+		else:
+			var light := Button.new()
+			light.text = "Light it (2 wood/batch)"
+			light.disabled = fuel < 2
+			light.pressed.connect(func() -> void:
+				_world().sv_furnace_light.rpc_id(1, smelter_open, true))
+			smelter_box.add_child(light)
+	else:   # range: set it and forget it
+		var target: int = node.get_meta("target", 0)
+		if target > 0:
+			var cooking := Label.new()
+			cooking.text = "Cooking… %d to go. Walk away, it's fine." % target
+			cooking.add_theme_font_size_override("font_size", 12)
+			smelter_box.add_child(cooking)
+		else:
+			for n in [2, 5, 10]:
+				var go := Button.new()
+				go.text = "Smelt %d (perfect, unattended)" % n
+				go.disabled = fuel < n
+				var nn: int = n
+				go.pressed.connect(func() -> void:
+					_world().sv_range_start.rpc_id(1, smelter_open, nn))
+				smelter_box.add_child(go)
+	if not out.is_empty():
+		var parts: PackedStringArray = []
+		for k in out:
+			parts.append("%d %s" % [out[k], GameItems.nice(k)])
+		var collect := Button.new()
+		collect.text = "Collect: " + ", ".join(parts)
+		collect.pressed.connect(func() -> void:
+			_world().sv_smelter_collect.rpc_id(1, smelter_open)
+			Sfx.play(self, "pickup", -6.0))
+		smelter_box.add_child(collect)
+
 func toggle_craft_list() -> void:
 	if not craft_panel.visible:
 		toggle_craft()
@@ -627,6 +735,9 @@ func toggle_craft() -> void:
 		container_open = ""
 		if container_box:
 			container_box.visible = false
+		smelter_open = ""
+		if smelter_box:
+			smelter_box.visible = false
 
 var _dmg_overlay: ColorRect
 var _was_night := false
@@ -681,6 +792,13 @@ func _process(delta: float) -> void:
 				container_box.visible = false
 			else:
 				_refresh_container()
+		if smelter_open != "":
+			var sn := _smelter_node()
+			if sn == null or sn.global_position.distance_to(player.global_position) > 5.0:
+				smelter_open = ""
+				smelter_box.visible = false
+			else:
+				_refresh_smelter()
 
 	# compact status: essentials only — the pack (Tab) holds the details
 	var key_res: PackedStringArray = []

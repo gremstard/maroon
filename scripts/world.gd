@@ -856,6 +856,72 @@ func rx_place_structure(sname: String, kind: String, pos: Vector3, yaw: float) -
 			tcs.height = 1.2
 			shape.shape = tcs
 			shape.position.y = 0.6
+		"range":
+			body.set_meta("hp", 250.0)
+			body.set_meta("fuel", 0)
+			body.set_meta("target", 0)
+			body.set_meta("out", {})
+			body.set_meta("cook_t", 0.0)
+			var enamel := _flat_mat(Color(0.85, 0.85, 0.87))
+			_piece_box(body, Vector3(1.2, 1.0, 0.8), enamel.albedo_color, Vector3(0, 0.5, 0))
+			_piece_box(body, Vector3(1.2, 0.08, 0.8), Color(0.15, 0.15, 0.17), Vector3(0, 1.04, 0), false)
+			_piece_box(body, Vector3(0.5, 0.5, 0.06), Color(0.2, 0.2, 0.22), Vector3(0, 0.45, -0.41), false)
+			_piece_box(body, Vector3(0.1, 0.06, 0.06), Color(0.72, 0.60, 0.28), Vector3(0.35, 0.6, -0.42), false)
+			var pipe := MeshInstance3D.new()
+			var ppm := CylinderMesh.new()
+			ppm.top_radius = 0.09
+			ppm.bottom_radius = 0.09
+			ppm.height = 1.0
+			pipe.mesh = ppm
+			pipe.material_override = _flat_mat(Color(0.25, 0.25, 0.28))
+			pipe.position = Vector3(-0.4, 1.5, 0.2)
+			body.add_child(pipe)
+		"chair":
+			body.set_meta("hp", 60.0)
+			_piece_box(body, Vector3(0.55, 0.08, 0.55), Color(0.52, 0.40, 0.24), Vector3(0, 0.45, 0))
+			_piece_box(body, Vector3(0.55, 0.6, 0.08), Color(0.52, 0.40, 0.24), Vector3(0, 0.8, 0.24), false)
+			for lx2 in [-0.22, 0.22]:
+				for lz2 in [-0.22, 0.22]:
+					_piece_box(body, Vector3(0.07, 0.45, 0.07), Color(0.40, 0.29, 0.17), Vector3(lx2, 0.22, lz2), false)
+		"table":
+			body.set_meta("hp", 80.0)
+			_piece_box(body, Vector3(1.5, 0.09, 0.9), Color(0.50, 0.38, 0.22), Vector3(0, 0.78, 0))
+			for lx3 in [-0.65, 0.65]:
+				for lz3 in [-0.35, 0.35]:
+					_piece_box(body, Vector3(0.08, 0.78, 0.08), Color(0.40, 0.29, 0.17), Vector3(lx3, 0.39, lz3), false)
+		"couch":
+			body.set_meta("hp", 90.0)
+			var cushion := Color(0.55, 0.30, 0.30)
+			_piece_box(body, Vector3(1.8, 0.45, 0.8), cushion, Vector3(0, 0.35, 0))
+			_piece_box(body, Vector3(1.8, 0.55, 0.2), cushion.darkened(0.15), Vector3(0, 0.85, 0.3), false)
+			for ax in [-0.85, 0.85]:
+				_piece_box(body, Vector3(0.14, 0.35, 0.8), cushion.darkened(0.25), Vector3(ax, 0.75, 0), false)
+		"vase":
+			body.set_meta("hp", 20.0)
+			var vase_rng := RandomNumberGenerator.new()
+			vase_rng.seed = sname.hash()
+			var vc := Color.from_hsv(vase_rng.randf(), 0.4, 0.7)
+			var vmesh := MeshInstance3D.new()
+			var vcm := CylinderMesh.new()
+			vcm.top_radius = 0.12
+			vcm.bottom_radius = 0.22
+			vcm.height = 0.55
+			vmesh.mesh = vcm
+			vmesh.material_override = _flat_mat(vc)
+			vmesh.position.y = 0.28
+			body.add_child(vmesh)
+			var vcs := CylinderShape3D.new()
+			vcs.radius = 0.22
+			vcs.height = 0.6
+			shape.shape = vcs
+			shape.position.y = 0.3
+		"rug":
+			body.set_meta("hp", 30.0)
+			var rug_rng := RandomNumberGenerator.new()
+			rug_rng.seed = sname.hash()
+			var rc := Color.from_hsv(rug_rng.randf(), 0.5, 0.55)
+			_piece_box(body, Vector3(1.8, 0.05, 1.2), rc, Vector3(0, 0.03, 0))
+			_piece_box(body, Vector3(1.5, 0.055, 0.9), rc.lightened(0.25), Vector3(0, 0.032, 0), false)
 		"bedroll":
 			body.set_meta("hp", 60.0)
 			_piece_box(body, Vector3(1.0, 0.14, 2.1), Color(0.45, 0.30, 0.28), Vector3(0, 0.07, 0))
@@ -954,6 +1020,11 @@ func rx_place_structure(sname: String, kind: String, pos: Vector3, yaw: float) -
 					blob, Vector3(art_rng.randf_range(-0.28, 0.28), art_rng.randf_range(-0.2, 0.2), -0.05), false)
 		"furnace":
 			body.set_meta("hp", 250.0)
+			body.set_meta("fuel", 0)
+			body.set_meta("burning", false)
+			body.set_meta("batch_t", 0.0)
+			body.set_meta("ready_t", 0.0)
+			body.set_meta("out", {})
 			var fstone := _flat_mat(Color(0.36, 0.36, 0.38))
 			var fbody := MeshInstance3D.new()
 			var fbm := BoxMesh.new()
@@ -2177,6 +2248,183 @@ func rx_monolith_awakened() -> void:
 	mono.add_child(mlight)
 	Sfx.play_at(self, mono.global_position, "chime", 2.0)
 
+# ================================================================ furnace & range
+
+const BATCH_TIME := 8.0     # seconds of watching per batch
+const PULL_WINDOW := 5.0    # pull it now or it's ash
+
+func _smelter_tick(delta: float) -> void:
+	# server: furnaces demand attention; ranges don't
+	for s in get_node("Structures").get_children():
+		var kind: String = s.get_meta("kind")
+		if kind == "furnace" and s.get_meta("burning", false):
+			if s.get_meta("ready_t", 0.0) > 0.0:
+				var rt: float = s.get_meta("ready_t") - delta
+				if rt <= 0.0:
+					# nobody pulled it — ash
+					var out: Dictionary = s.get_meta("out")
+					out["ash"] = int(out.get("ash", 0)) + 1
+					s.set_meta("ready_t", 0.0)
+					_furnace_next_batch(s)
+				else:
+					s.set_meta("ready_t", rt)
+			else:
+				var bt: float = s.get_meta("batch_t") + delta
+				if bt >= BATCH_TIME:
+					s.set_meta("batch_t", 0.0)
+					s.set_meta("ready_t", PULL_WINDOW)
+					Sfx.play_at(self, s.global_position, "chime", -6.0)
+				else:
+					s.set_meta("batch_t", bt)
+			_bcast_smelter(s)
+		elif kind == "range" and int(s.get_meta("target", 0)) > 0:
+			if int(s.get_meta("fuel", 0)) <= 0:
+				s.set_meta("target", 0)
+			else:
+				var ct: float = s.get_meta("cook_t") + delta
+				if ct >= 4.0:
+					ct = 0.0
+					s.set_meta("fuel", int(s.get_meta("fuel")) - 1)
+					s.set_meta("target", int(s.get_meta("target")) - 1)
+					var out2: Dictionary = s.get_meta("out")
+					out2["charcoal"] = int(out2.get("charcoal", 0)) + 1
+				s.set_meta("cook_t", ct)
+			_bcast_smelter(s)
+
+func _furnace_next_batch(s: Node) -> void:
+	# each batch eats 2 wood; the fire dies when the wood does
+	var fuel: int = s.get_meta("fuel")
+	if fuel >= 2:
+		s.set_meta("fuel", fuel - 2)
+		s.set_meta("batch_t", 0.0)
+	else:
+		s.set_meta("burning", false)
+
+func _bcast_smelter(s: Node) -> void:
+	rx_smelter.rpc(String(s.name), int(s.get_meta("fuel", 0)), s.get_meta("burning", false),
+		float(s.get_meta("batch_t", 0.0)), float(s.get_meta("ready_t", 0.0)),
+		s.get_meta("out", {}), int(s.get_meta("target", 0)))
+
+@rpc("authority", "call_local", "unreliable")
+func rx_smelter(sname: String, fuel: int, burning: bool, batch_t: float, ready_t: float, out: Dictionary, target: int) -> void:
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	s.set_meta("fuel", fuel)
+	s.set_meta("burning", burning)
+	s.set_meta("batch_t", batch_t)
+	s.set_meta("ready_t", ready_t)
+	s.set_meta("out", out)
+	s.set_meta("target", target)
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_smelter_load(sname: String, n: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var holder := get_node("Structures")
+	if not holder.has_node(sname) or n <= 0:
+		return
+	var s := holder.get_node(sname)
+	if s.get_meta("kind") not in ["furnace", "range"]:
+		return
+	s.set_meta("fuel", int(s.get_meta("fuel", 0)) + mini(n, 50))
+	_bcast_smelter(s)
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_furnace_light(sname: String, on: bool) -> void:
+	if not multiplayer.is_server():
+		return
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	if s.get_meta("kind") != "furnace":
+		return
+	if on and not s.get_meta("burning", false) and int(s.get_meta("fuel", 0)) >= 2:
+		s.set_meta("burning", true)
+		s.set_meta("fuel", int(s.get_meta("fuel")) - 2)
+		s.set_meta("batch_t", 0.0)
+		s.set_meta("ready_t", 0.0)
+		Sfx.play_at(self, s.global_position, "place", -8.0)
+	elif not on:
+		s.set_meta("burning", false)
+	_bcast_smelter(s)
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_furnace_pull(sname: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender == 0:
+		sender = 1
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	if s.get_meta("kind") != "furnace" or float(s.get_meta("ready_t", 0.0)) <= 0.0:
+		return
+	s.set_meta("ready_t", 0.0)
+	_grant_items(sender, {"charcoal": 2})
+	_furnace_next_batch(s)
+	_bcast_smelter(s)
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_range_start(sname: String, target: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	if s.get_meta("kind") != "range":
+		return
+	s.set_meta("target", clampi(target, 0, int(s.get_meta("fuel", 0))))
+	s.set_meta("cook_t", 0.0)
+	_bcast_smelter(s)
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_smelter_collect(sname: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender == 0:
+		sender = 1
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	var out: Dictionary = s.get_meta("out", {})
+	if out.is_empty():
+		return
+	_grant_items(sender, out.duplicate())
+	s.set_meta("out", {})
+	_bcast_smelter(s)
+
+@rpc("any_peer", "call_local", "reliable")
+func sv_salvage(sname: String) -> void:
+	# X with a hammer on decor/placeables: it comes home whole
+	if not multiplayer.is_server():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender == 0:
+		sender = 1
+	var holder := get_node("Structures")
+	if not holder.has_node(sname):
+		return
+	var s := holder.get_node(sname)
+	var kind: String = s.get_meta("kind")
+	if kind not in GameItems.SALVAGEABLE:
+		return
+	if kind in GameItems.CONTAINERS and not (s.get_meta("store", {}) as Dictionary).is_empty():
+		return   # empty it first
+	if s.get_meta("locked", false):
+		return   # locked things don't come apart politely
+	if kind == "furnace" and s.get_meta("burning", false):
+		return
+	_grant_items(sender, {kind: 1})
+	rx_remove_structure.rpc(sname)
+
 # ================================================================ the long game
 # STORY -> HARD -> HARDCORE -> THE END. The Heart route buys peace the kind
 # way; the totem route earns it. Feed the totem a moonstone at night and it
@@ -2594,6 +2842,8 @@ func save_now() -> void:
 			e["store"] = s.get_meta("store")
 		if s.get_meta("locked", false):
 			e["lock"] = {"owner": s.get_meta("lock_owner"), "hp": s.get_meta("lock_hp")}
+		if s.get_meta("kind") in ["furnace", "range"]:
+			e["smelter"] = {"fuel": s.get_meta("fuel", 0), "out": s.get_meta("out", {})}
 		structs.append(e)
 	var res := {}
 	for r in get_node("Resources").get_children():
@@ -2644,6 +2894,13 @@ func _load_save() -> bool:
 			rx_container_store(e["name"], clean)
 		if e.has("lock"):
 			rx_lock(e["name"], String(e["lock"]["owner"]), float(e["lock"]["hp"]))
+		if e.has("smelter") and get_node("Structures").has_node(e["name"]):
+			var sm := get_node("Structures").get_node(e["name"])
+			sm.set_meta("fuel", int(e["smelter"].get("fuel", 0)))
+			var sout := {}
+			for ok2 in e["smelter"].get("out", {}):
+				sout[String(ok2)] = int(e["smelter"]["out"][ok2])
+			sm.set_meta("out", sout)
 	for rname in data.get("res", {}):
 		rx_resource_hp(rname, float(data["res"][rname]))
 	for cname in data.get("looted", []):
@@ -2679,6 +2936,7 @@ func _process(delta: float) -> void:
 	_weather_client_tick(delta)
 	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
 		_weather_tick(delta)
+		_smelter_tick(delta)
 		var was_night := is_night()
 		time_of_day += delta * 24.0 / DAY_LENGTH
 		if time_of_day >= 24.0:
@@ -2796,6 +3054,10 @@ func sync_to(peer: int) -> void:
 			rx_container_store.rpc_id(peer, String(s.name), s.get_meta("store"))
 		if s.get_meta("locked", false):
 			rx_lock.rpc_id(peer, String(s.name), String(s.get_meta("lock_owner")), float(s.get_meta("lock_hp")))
+		if s.get_meta("kind") in ["furnace", "range"]:
+			rx_smelter.rpc_id(peer, String(s.name), int(s.get_meta("fuel", 0)), s.get_meta("burning", false),
+				float(s.get_meta("batch_t", 0.0)), float(s.get_meta("ready_t", 0.0)),
+				s.get_meta("out", {}), int(s.get_meta("target", 0)))
 	for r in get_node("Resources").get_children():
 		var hp: float = r.get_meta("hp")
 		if hp < GameItems.RES_STATS[r.get_meta("kind")]["hp"]:

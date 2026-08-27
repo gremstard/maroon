@@ -18,6 +18,12 @@ const RECIPES := {
 	"drawers":    {"wood": 12, "string": 1},
 	"cabinet":    {"wood": 14, "string": 2},
 	"furnace":    {"stone": 16, "wood": 4},
+	"range":      {"iron_bar": 4, "stone": 10, "string": 2},
+	"chair":      {"wood": 4},
+	"table":      {"wood": 6},
+	"couch":      {"wood": 6, "cloth": 2},
+	"vase":       {"stone": 2},
+	"rug":        {"cloth": 3},
 	"totem":      {"wood": 20, "stone": 10},
 	"forge":      {"stone": 20, "wood": 10},
 	"beacon":     {"wood": 10, "iron_ore": 3, "string": 2, "ancient_lens": 1},
@@ -84,8 +90,13 @@ const BCELL := 3.0
 const BWALL_H := 2.6
 
 const PLACEABLES := ["torch", "bedroll", "campfire", "workbench", "crate", "chest",
-	"drawers", "cabinet", "furnace", "totem", "forge", "beacon",
-	"lamp", "painting"]
+	"drawers", "cabinet", "furnace", "range", "totem", "forge", "beacon",
+	"lamp", "painting", "chair", "table", "couch", "vase", "rug"]
+
+# X with a hammer: build pieces demolish for half wood; these come back whole.
+const SALVAGEABLE := ["torch", "bedroll", "campfire", "workbench", "crate",
+	"chest", "drawers", "cabinet", "furnace", "range", "lamp", "painting",
+	"chair", "table", "couch", "vase", "rug", "beacon", "forge"]
 
 # Storage: rows of a 4-wide grid; a container holds that many stacks.
 # "pack" is the dropped-on-death bundle — never crafted, always lootable.
@@ -134,7 +145,12 @@ const DESCRIPTIONS := {
 	"chest": "Proper storage with a lid. 12 stacks.",
 	"drawers": "Neat little compartments. 12 stacks.",
 	"cabinet": "The good furniture. 16 stacks.",
-	"furnace": "Burns wood into charcoal (E with 4 wood). Fuel for the forge.",
+	"furnace": "Load wood, light it, WATCH IT. Pull each batch in time or it burns to ash. Esc doesn't stop it.",
+	"range": "The good stove. Set an amount, walk away, come back to perfect charcoal. Iron buys convenience.",
+	"ash": "A batch nobody pulled. Somebody walked away.",
+	"chair": "Sit. You've earned it.", "table": "Somewhere to put the moonstone.",
+	"couch": "The height of island luxury.", "vase": "Every home needs one thing with no use.",
+	"rug": "Really ties the hut together.",
 	"cloth": "Woven from string. Dye it, wear it.",
 	"red_dye": "Crushed berries. For cloth worth wearing.",
 	"yellow_dye": "Dry grass, boiled down to its color.",
@@ -235,7 +251,9 @@ const NICE_NAMES := {
 	"heartstone": "Heartstone", "heart_shard": "Heart Shard",
 	"lock": "Lock", "key": "Key", "lock_and_key": "Lock & Key",
 	"key_copy": "Duplicate Key", "lock_copy": "Matching Lock",
-	"pack": "Dropped Pack", "bedroll": "Bedroll",
+	"pack": "Dropped Pack", "bedroll": "Bedroll", "ash": "Ash",
+	"range": "Range", "chair": "Chair", "table": "Table", "couch": "Couch",
+	"vase": "Vase", "rug": "Rug",
 	"foundation": "Foundation", "floor": "Floor",
 	"half_wall": "Half Wall", "doorway": "Doorway", "window": "Window Wall",
 	"gable": "Gable", "roof": "Roof", "slope": "Sloped Roof",
@@ -300,7 +318,8 @@ const STACK_MAX := {
 	"cloth": 20, "red_dye": 10, "yellow_dye": 10, "black_dye": 10,
 	"lamp": 2, "painting": 3,
 	"raw_fish": 10, "cooked_fish": 10, "moonfin": 5, "heartstone": 5,
-	"lock": 5, "key": 5, "bedroll": 2,
+	"lock": 5, "key": 5, "bedroll": 2, "ash": 20,
+	"range": 1, "chair": 3, "table": 2, "couch": 2, "vase": 4, "rug": 4,
 }
 
 static func stack_max(item: String) -> int:
@@ -328,6 +347,9 @@ const CATEGORY_COLORS := {
 	"moonfin": Color(0.55, 0.70, 0.90), "heartstone": Color(0.70, 0.25, 0.22),
 	"heart_shard": Color(0.85, 0.35, 0.30),
 	"lock": Color(0.72, 0.60, 0.28), "key": Color(0.78, 0.68, 0.35),
+	"ash": Color(0.42, 0.40, 0.38), "range": Color(0.80, 0.80, 0.82),
+	"chair": Color(0.52, 0.40, 0.24), "table": Color(0.50, 0.38, 0.22),
+	"couch": Color(0.55, 0.30, 0.30), "vase": Color(0.60, 0.58, 0.62), "rug": Color(0.55, 0.25, 0.28),
 	"charcoal": Color(0.20, 0.20, 0.22), "crate": Color(0.52, 0.40, 0.24),
 	"chest": Color(0.45, 0.32, 0.16), "drawers": Color(0.50, 0.36, 0.20),
 	"cabinet": Color(0.42, 0.30, 0.18), "furnace": Color(0.38, 0.38, 0.40),

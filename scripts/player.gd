@@ -120,7 +120,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.is_action_pressed("demolish"):
 			var hit := _raycast()
 			if not hit.is_empty() and hit["collider"] is Node and hit["collider"].has_meta("struct"):
-				_world().sv_remove_structure.rpc_id(1, String(hit["collider"].name))
+				var dkind: String = hit["collider"].get_meta("kind")
+				if dkind in GameItems.SALVAGEABLE:
+					_world().sv_salvage.rpc_id(1, String(hit["collider"].name))
+					if hud and dkind == "painting":
+						hud.flash("Salvaged. (The paint shifts a little in transit.)")
+				else:
+					_world().sv_remove_structure.rpc_id(1, String(hit["collider"].name))
 		if event is InputEventMouseButton and event.pressed:
 			var n := GameItems.BUILD_PIECES.size()
 			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -1639,15 +1645,9 @@ func _interact() -> void:
 				return
 			if hud:
 				hud.open_container(String(col.name))
-		elif kind == "furnace":
-			if inv.get("wood", 0) >= 4:
-				inv["wood"] -= 4
-				_world().sv_make_charcoal.rpc_id(1)
-				Sfx.play(self, "craft", -8.0)
-				if hud:
-					hud.flash("The furnace roars. 4 wood in, 2 charcoal out.")
-			elif hud:
-				hud.flash("The furnace wants 4 wood at a time.")
+		elif kind in ["furnace", "range"]:
+			if hud:
+				hud.open_smelter(String(col.name))
 		elif kind in ["door", "shutter", "trapdoor"]:
 			if col.get_meta("locked", false) and not _lock_pass(col):
 				return

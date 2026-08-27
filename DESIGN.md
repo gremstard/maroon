@@ -375,6 +375,20 @@ codesigning** in exports + the Gatekeeper "damaged" fix documented on the
 site and README; website refreshed (new shots, Long Game/locks/weather cards,
 troubleshooting) and deployed; `--port=` flag for running servers side by side.
 
+## v0.22 status (this repo)
+Added in 0.22 — **the furnace attention economy + decor & salvage** (queue
+items 5–6b closed): the **furnace** is now a watched menu — load wood, light
+it (2 wood/batch), watch the progress bar, and **pull each batch inside a 5 s
+window or it burns to ash** in the tray; Esc is an exit, not a pause — it
+keeps burning and keeps ruining batches until it's out of fuel or turned off.
+The **Range** (iron-tier) is the convenience purchase: load, set an amount,
+walk away, come back to perfect charcoal. **Ash** is a new item (fertilizer
+someday). **Furniture**: chair, table, couch, vase (each glazed its own
+color), rug (each woven its own pattern) — homes look like homes. **Salvage**:
+X with the hammer returns any placeable/decor to your pack whole (containers
+must be empty, locked things refuse, burning furnaces refuse; paintings
+repaint in transit — the paint shifts, that's the lore).
+
 ## v0.20 status (this repo)
 Added in 0.20 — **death, locks & the household**: **dying drops everything you
 carried** into a lootable pack right where you fell (corpse-run to reclaim it;
