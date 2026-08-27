@@ -173,6 +173,14 @@ second colored box instead.
 - Server-authoritative world state (resources, animals, structures, time).
 - No text chat, no voice, no names beyond a small ID tag. By design.
 
+## Reference documents
+- [docs/HISTORY.md](docs/HISTORY.md) — the full development chronicle, v0.1 → v0.22.1
+- [docs/DECISIONS.md](docs/DECISIONS.md) — every significant decision and its reasoning
+- [docs/SYSTEMS.md](docs/SYSTEMS.md) — how every mechanic works, with numbers
+- [docs/M2-NOTES.md](docs/M2-NOTES.md) — everything decided about the sequel (working name: Crimson)
+- [docs/PLAYTEST-LOG.md](docs/PLAYTEST-LOG.md) — mrrzone's feedback and resolutions
+- [docs/BUILDING.md](docs/BUILDING.md) — build, run, release
+
 ## The Long Game — mode arc (designed, not yet built)
 The game's shape: Minecraft never ends, Rust never rests. Maroon does both —
 **you earn the cozy game by beating the brutal one.** Target: 10–20 hours to
