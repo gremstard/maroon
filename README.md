@@ -68,6 +68,11 @@ plan through 1.0: survive the hard game, earn the peaceful one.
 
 Maroon is friends-only co-op — no accounts, no matchmaking, no strangers.
 
+- **First, the easy case:** when you host, Maroon **tries UPnP
+  automatically** — on most home routers it opens UDP 27455 by itself and
+  shows you the exact IP to share ("Port auto-forwarded ✓ — friends join
+  at: …"). If your router refuses, the message says so, and the options
+  below still work.
 - **Same house / LAN:** one of you clicks **New World** (or **Continue**);
   everyone else picks **Join a World** and enters the host's local IP
   (the host can find it in their network settings, usually `192.168.x.x`).

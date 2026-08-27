@@ -299,6 +299,58 @@ func _ready() -> void:
 				ip_edit.text = a.substr(9)
 				_on_join_pressed()
 
+# ---------------------------------------------------------------- UPnP
+# When hosting, try to port-forward UDP 27455 on the router automatically
+# and learn our public IP — so "share your IP" actually just works on most
+# home networks. Threaded: router discovery can take seconds.
+
+var _upnp: UPNP = null
+var _upnp_thread: Thread = null
+var public_ip := ""
+
+func _start_upnp() -> void:
+	if _upnp_thread != null:
+		return
+	_upnp_thread = Thread.new()
+	_upnp_thread.start(_upnp_worker)
+
+func _upnp_worker() -> void:
+	var upnp := UPNP.new()
+	var err := upnp.discover(2000, 2, "InternetGatewayDevice")
+	var ip := ""
+	var mapped := false
+	if err == UPNP.UPNP_RESULT_SUCCESS and upnp.get_gateway() != null \
+			and upnp.get_gateway().is_valid_gateway():
+		upnp.delete_port_mapping(PORT, "UDP")   # clear any stale mapping first
+		mapped = upnp.add_port_mapping(PORT, PORT, "Maroon", "UDP", 0) == UPNP.UPNP_RESULT_SUCCESS
+		ip = upnp.query_external_address()
+	call_deferred("_upnp_done", upnp, mapped, ip)
+
+func _upnp_done(upnp: UPNP, mapped: bool, ip: String) -> void:
+	if _upnp_thread:
+		_upnp_thread.wait_to_finish()
+		_upnp_thread = null
+	_upnp = upnp
+	public_ip = ip
+	var msg := ""
+	if mapped and ip != "":
+		msg = "Port auto-forwarded ✓ — friends join at:  %s" % ip
+	elif ip != "":
+		msg = "Router refused auto-forward. Public IP %s needs manual UDP %d — or use LAN/Tailscale." % [ip, PORT]
+	else:
+		msg = "No UPnP router found — use LAN IP, Tailscale, or forward UDP %d manually." % PORT
+	_set_status(msg)   # (prints too)
+	if world:
+		for p in world.get_node("Players").get_children():
+			if p.is_local() and p.hud:
+				p.hud.flash(msg)
+
+func _stop_upnp() -> void:
+	if _upnp != null:
+		_upnp.delete_port_mapping(PORT, "UDP")
+		_upnp = null
+		public_ip = ""
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_F11:
 		var fullscreen := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
@@ -311,6 +363,7 @@ func _notification(what: int) -> void:
 			world.save_now()
 			for p in world.get_node("Players").get_children():
 				p.save_local()
+		_stop_upnp()
 		get_tree().quit()
 
 # ---------------------------------------------------------------- input map
@@ -593,6 +646,7 @@ func return_to_menu() -> void:
 	if multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer.close()
 		multiplayer.multiplayer_peer = null
+	_stop_upnp()   # close the door behind us
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	menu.visible = true
 	if music:
@@ -779,6 +833,12 @@ func _host() -> void:
 		return
 	multiplayer.multiplayer_peer = peer
 	_start_world(world_seed)
+	var test_run := false
+	for a in OS.get_cmdline_user_args():
+		if a == "--smoke" or a.begins_with("--shot"):
+			test_run = true
+	if not test_run:
+		_start_upnp()   # try to open the door for internet friends
 	if not dedicated:
 		_spawn_player(1)
 		menu.visible = false
