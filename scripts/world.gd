@@ -856,6 +856,11 @@ func rx_place_structure(sname: String, kind: String, pos: Vector3, yaw: float) -
 			tcs.height = 1.2
 			shape.shape = tcs
 			shape.position.y = 0.6
+		"bedroll":
+			body.set_meta("hp", 60.0)
+			_piece_box(body, Vector3(1.0, 0.14, 2.1), Color(0.45, 0.30, 0.28), Vector3(0, 0.07, 0))
+			_piece_box(body, Vector3(0.7, 0.16, 0.45), Color(0.75, 0.70, 0.60), Vector3(0, 0.2, -0.75), false)
+			_piece_box(body, Vector3(1.0, 0.06, 1.2), Color(0.35, 0.24, 0.22), Vector3(0, 0.16, 0.35), false)
 		"pack":
 			body.set_meta("hp", 120.0)
 			body.set_meta("store", {})

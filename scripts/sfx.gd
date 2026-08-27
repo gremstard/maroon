@@ -71,6 +71,43 @@ static func stream(name: String) -> AudioStreamWAV:
 	_cache[name] = wav
 	return wav
 
+# The menu theme: a slow Am–F–C–G swell, synthesized like everything else.
+# Sixteen seconds, loops forever, sounds like being far from home.
+static func theme() -> AudioStreamWAV:
+	if _cache.has("__theme"):
+		return _cache["__theme"]
+	var chords := [
+		[220.0, 261.63, 329.63],   # Am
+		[174.61, 220.0, 261.63],   # F
+		[261.63, 329.63, 392.0],   # C
+		[196.0, 246.94, 293.66],   # G
+	]
+	var seg := 4.0
+	var n := int(seg * chords.size() * RATE)
+	var data := PackedByteArray()
+	data.resize(n * 2)
+	for i in n:
+		var t := float(i) / RATE
+		var ci := int(t / seg) % chords.size()
+		var local := fmod(t, seg) / seg
+		var env := sin(local * PI)
+		env = env * env * 0.85 + 0.15
+		var s := 0.0
+		for f in chords[ci]:
+			s += sin(t * TAU * f) * 0.09
+			s += sin(t * TAU * (f + 0.4)) * 0.05      # slow beat-detune shimmer
+		s += sin(t * TAU * chords[ci][0] * 0.5) * 0.08   # sub root
+		var v := int(clampf(s * env, -1.0, 1.0) * 30000.0)
+		data.encode_s16(i * 2, v)
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = RATE
+	wav.data = data
+	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	wav.loop_end = n
+	_cache["__theme"] = wav
+	return wav
+
 # UI / self sounds (no position)
 static func play(host: Node, name: String, volume_db := 0.0) -> void:
 	var p := AudioStreamPlayer.new()

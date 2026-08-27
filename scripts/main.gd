@@ -2,6 +2,7 @@ extends Node
 # Entry point: main menu, network session management, player spawning.
 
 const PORT := 27455
+var port := PORT
 const MAX_PLAYERS := 8
 
 var world_seed: int = 0
@@ -21,13 +22,26 @@ var auth_status: Label = null
 var email_edit: LineEdit
 var pass_edit: LineEdit
 
+var music: AudioStreamPlayer
+
+func _apply_settings() -> void:
+	var st: Dictionary = profile.get("settings", {})
+	AudioServer.set_bus_volume_db(0, linear_to_db(clampf(float(st.get("volume", 0.8)), 0.01, 1.0)))
+
 func _ready() -> void:
 	get_tree().set_auto_accept_quit(false)   # so we can save on window close
 	profile = Profile.load_profile()
+	_apply_settings()
 	fb = Firebase.new()
 	add_child(fb)
 	_register_inputs()
 	_build_menu()
+	music = AudioStreamPlayer.new()
+	music.stream = Sfx.theme()
+	music.volume_db = -12.0
+	add_child(music)
+	if not ("--smoke" in OS.get_cmdline_user_args() or "--server" in OS.get_cmdline_user_args()):
+		music.play()
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
@@ -35,6 +49,9 @@ func _ready() -> void:
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 
 	var args := OS.get_cmdline_user_args()
+	for a0 in args:
+		if a0.begins_with("--port="):
+			port = int(a0.substr(7))
 	if "--server" in args:
 		dedicated = true
 		world_seed = randi() % 1000000
@@ -53,6 +70,7 @@ func _ready() -> void:
 		print("[maroon] screenshot saved: ", ProjectSettings.globalize_path("user://shot.png"))
 		get_tree().quit()
 	elif "--smoke" in args:
+		port = 27461   # stay clear of a real game on this machine
 		world_seed = 42
 		DirAccess.remove_absolute("user://saves/world_42.json")
 		DirAccess.remove_absolute("user://saves/player_42.json")
@@ -256,6 +274,12 @@ func _ready() -> void:
 				ip_edit.text = a.substr(9)
 				_on_join_pressed()
 
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_F11:
+		var fullscreen := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+		DisplayServer.window_set_mode(
+			DisplayServer.WINDOW_MODE_WINDOWED if fullscreen else DisplayServer.WINDOW_MODE_FULLSCREEN)
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		if world:
@@ -355,6 +379,7 @@ func _build_menu() -> void:
 		"Join a World": func() -> void: _show_ctx("join"),
 		"Added Worlds": func() -> void: _show_ctx("added"),
 		"Controls": func() -> void: _show_ctx("controls"),
+		"Settings": func() -> void: _show_ctx("settings"),
 	}
 	for label in nav:
 		var b := Button.new()
@@ -414,6 +439,53 @@ func _show_ctx(mode: String) -> void:
 			jb.text = "Join"
 			jb.pressed.connect(_on_join_pressed)
 			ctx_box.add_child(jb)
+		"settings":
+			var st: Dictionary = profile.get("settings", {})
+			var srow := func(label: String, key: String, minv: float, maxv: float, defv: float, step: float) -> void:
+				var row := HBoxContainer.new()
+				var l := Label.new()
+				l.text = label
+				l.custom_minimum_size = Vector2(110, 0)
+				l.add_theme_font_size_override("font_size", 12)
+				row.add_child(l)
+				var slider := HSlider.new()
+				slider.min_value = minv
+				slider.max_value = maxv
+				slider.step = step
+				slider.value = float(st.get(key, defv))
+				slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				slider.value_changed.connect(func(v: float) -> void:
+					var st2: Dictionary = profile.get("settings", {})
+					st2[key] = v
+					profile["settings"] = st2
+					Profile.save_profile(profile)
+					_apply_settings())
+				row.add_child(slider)
+				ctx_box.add_child(row)
+			srow.call("Volume", "volume", 0.0, 1.0, 0.8, 0.05)
+			srow.call("Sensitivity", "sensitivity", 0.3, 2.5, 1.0, 0.05)
+			srow.call("Field of view", "fov", 60.0, 100.0, 75.0, 1.0)
+			var inv_btn := Button.new()
+			inv_btn.text = "Invert Y: " + ("on" if st.get("invert_y", false) else "off")
+			inv_btn.pressed.connect(func() -> void:
+				var st3: Dictionary = profile.get("settings", {})
+				st3["invert_y"] = not st3.get("invert_y", false)
+				profile["settings"] = st3
+				Profile.save_profile(profile)
+				inv_btn.text = "Invert Y: " + ("on" if st3["invert_y"] else "off"))
+			ctx_box.add_child(inv_btn)
+			var fs_btn := Button.new()
+			fs_btn.text = "Toggle fullscreen (F11)"
+			fs_btn.pressed.connect(func() -> void:
+				var fs := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+				DisplayServer.window_set_mode(
+					DisplayServer.WINDOW_MODE_WINDOWED if fs else DisplayServer.WINDOW_MODE_FULLSCREEN))
+			ctx_box.add_child(fs_btn)
+			var note := Label.new()
+			note.text = "Sensitivity, FOV and invert apply on next spawn."
+			note.add_theme_font_size_override("font_size", 11)
+			note.modulate = Color(1, 1, 1, 0.45)
+			ctx_box.add_child(note)
 		"controls":
 			var cl := Label.new()
 			cl.text = CONTROLS_TEXT
@@ -498,6 +570,8 @@ func return_to_menu() -> void:
 		multiplayer.multiplayer_peer = null
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	menu.visible = true
+	if music:
+		music.play()
 	_set_status("")
 
 func _build_character_panel(parent: Node) -> void:
@@ -674,7 +748,7 @@ func _on_host_pressed() -> void:
 
 func _host() -> void:
 	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_server(PORT, MAX_PLAYERS)
+	var err := peer.create_server(port, MAX_PLAYERS)
 	if err != OK:
 		_set_status("Couldn't open port %d (already hosting?)" % PORT)
 		return
@@ -683,10 +757,12 @@ func _host() -> void:
 	if not dedicated:
 		_spawn_player(1)
 		menu.visible = false
+	if music:
+		music.stop()
 
 func _on_join_pressed() -> void:
 	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_client(ip_edit.text.strip_edges(), PORT)
+	var err := peer.create_client(ip_edit.text.strip_edges(), port)
 	if err != OK:
 		_set_status("Bad address.")
 		return
@@ -725,6 +801,8 @@ func rx_world_info(s: int, existing_players: Array) -> void:
 	for pid in existing_players:
 		_spawn_player(pid)
 	menu.visible = false
+	if music:
+		music.stop()
 	sv_client_ready.rpc_id(1)
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -1226,6 +1304,16 @@ func _run_smoke_test() -> void:
 
 	p.hunger = 100.0
 	p.hp = 100.0
+	# bedroll: claim it, die, wake on it
+	var bed_pos: Vector3 = p.global_position + Vector3(4, 0, -3)
+	world.sv_place_structure("bedroll", bed_pos, 0.0)
+	await get_tree().create_timer(0.2).timeout
+	p.spawn_override = bed_pos + Vector3(0, 0.5, 0)
+	p.rx_damage(9999.0)
+	await get_tree().create_timer(0.3).timeout
+	print("[smoke] bedroll respawn: dist=%.1f" % p.global_position.distance_to(bed_pos))
+	ok = ok and p.global_position.distance_to(bed_pos) < 3.0
+
 	# locks & household: pair-craft, mount, gate, bash, share
 	world.sv_place_structure("workbench", p.global_position + Vector3(2, 0, 2), 0.0)
 	world.sv_place_structure("doorway", p.global_position + Vector3(-3, 0, 2), 0.0)

@@ -364,6 +364,17 @@ Big systems, in build order, each its own pass:
   accidental friendly fire inside them.
 - No wipes — worlds are meant to be kept.
 
+## v0.21 status (this repo)
+Added in 0.21 — product completeness: **Settings** in the menu (volume,
+sensitivity, FOV, invert Y, fullscreen toggle — persisted in the profile);
+**menu theme music** (a synthesized Am–F–C–G swell, like everything else —
+no audio files); **bedrolls** (hide + fiber, hand-craft; E to claim one as
+your spawn — death brings you back to it instead of the beach, completing the
+death-drop loop); game launches **fullscreen** (F11 toggles); **macOS ad-hoc
+codesigning** in exports + the Gatekeeper "damaged" fix documented on the
+site and README; website refreshed (new shots, Long Game/locks/weather cards,
+troubleshooting) and deployed; `--port=` flag for running servers side by side.
+
 ## v0.20 status (this repo)
 Added in 0.20 — **death, locks & the household**: **dying drops everything you
 carried** into a lootable pack right where you fell (corpse-run to reclaim it;

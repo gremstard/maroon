@@ -87,8 +87,13 @@ func _ready() -> void:
 		hud.setup(self)
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		load_local()
-		# your identity, chosen in the menu
-		apply_appearance(Profile.appearance_of(Profile.load_profile()))
+		# your identity — and your settings — chosen in the menu
+		var prof := Profile.load_profile()
+		var st: Dictionary = prof.get("settings", {})
+		sens = float(st.get("sensitivity", 1.0))
+		base_fov = float(st.get("fov", 75.0))
+		invert_y = bool(st.get("invert_y", false))
+		apply_appearance(Profile.appearance_of(prof))
 		rx_appearance.rpc(appearance)
 	else:
 		_tag = Label3D.new()
@@ -103,8 +108,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not is_local():
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		rotation.y -= event.relative.x * 0.0025
-		head.rotation.x = clampf(head.rotation.x - event.relative.y * 0.0025, -1.4, 1.4)
+		rotation.y -= event.relative.x * 0.0025 * sens
+		var dy: float = event.relative.y * 0.0025 * sens * (-1.0 if invert_y else 1.0)
+		head.rotation.x = clampf(head.rotation.x - dy, -1.4, 1.4)
 	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE:
 		if hud:
 			hud.toggle_pause()
@@ -178,7 +184,7 @@ func _physics_process(delta: float) -> void:
 			Sfx.play(self, "step", -16.0)
 	else:
 		cam.position.y = lerpf(cam.position.y, 0.0, delta * 8.0)
-	cam.fov = lerpf(cam.fov, 82.0 if speed > SPEED + 0.5 and moving else 75.0, delta * 6.0)
+	cam.fov = lerpf(cam.fov, base_fov + 7.0 if speed > SPEED + 0.5 and moving else base_fov, delta * 6.0)
 
 	# actions
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
@@ -552,7 +558,20 @@ func _respawn() -> void:
 	hp = 100.0
 	hunger = 60.0
 	if w:
-		global_position = w.get_spawn_pos(peer_id)
+		# a claimed bedroll beats the beach — if it still exists
+		var bed_ok := false
+		if spawn_override != Vector3.ZERO:
+			for s in w.get_node("Structures").get_children():
+				if s.get_meta("kind") == "bedroll" and s.global_position.distance_to(spawn_override) < 2.5:
+					bed_ok = true
+					break
+		if bed_ok:
+			global_position = spawn_override
+			if hud:
+				hud.flash("You wake on your bedroll, gasping.")
+		else:
+			spawn_override = Vector3.ZERO
+			global_position = w.get_spawn_pos(peer_id)
 	velocity = Vector3.ZERO
 	if hud:
 		hud.flash("You washed back up on the beach.")
@@ -1028,6 +1047,10 @@ func _set_lamp(on: bool) -> void:
 		rx_lamp.rpc(on)
 
 var poisoned_t := 0.0
+var spawn_override := Vector3.ZERO   # a claimed bedroll
+var sens := 1.0
+var base_fov := 75.0
+var invert_y := false
 
 @rpc("any_peer", "call_local", "reliable")
 func rx_poison() -> void:
@@ -1538,6 +1561,12 @@ func _interact() -> void:
 			if hud:
 				hud.flash("Locked. Your key — and your household's — turns it.")
 		return
+	if col is Node and col.has_meta("struct") and col.get_meta("kind") == "bedroll":
+		spawn_override = col.global_position + Vector3(0, 0.5, 0)
+		Sfx.play(self, "chime", -12.0)
+		if hud:
+			hud.flash("This bedroll is yours now. Death brings you back here.")
+		return
 	if col is Node and col.has_meta("depths_hatch"):
 		if _world().get_node("Monolith").get_meta("awakened"):
 			global_position = _world().depths_center + Vector3(14, 1.2, 2)
@@ -1755,6 +1784,7 @@ func save_local() -> void:
 		"gathered": total_gathered, "events": events,
 		"hp": hp, "hunger": hunger, "equipment": equipment,
 		"hotbar": hotbar_items, "grid": grid_stacks,
+		"bed": [spawn_override.x, spawn_override.y, spawn_override.z],
 	}
 	var f := FileAccess.open(_psave_file(), FileAccess.WRITE)
 	f.store_string(JSON.stringify(data))
@@ -1788,6 +1818,8 @@ func load_local() -> void:
 	for g in data.get("grid", []):
 		grid_stacks.append({"item": String(g["item"]), "count": int(g["count"]),
 			"x": int(g["x"]), "y": int(g["y"]), "w": int(g["w"]), "h": int(g["h"])})
+	var bed: Array = data.get("bed", [0, 0, 0])
+	spawn_override = Vector3(float(bed[0]), float(bed[1]), float(bed[2]))
 	if hotbar_items == ["", "", "", ""]:
 		# older save or fresh hands: bind the best of what you own
 		for cat in ["axe", "pick", "spear"]:

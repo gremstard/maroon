@@ -9,6 +9,7 @@ const RECIPES := {
 	"stone_axe":  {"wood": 4, "stone": 6, "string": 2},
 	"stone_pick": {"wood": 4, "stone": 6, "string": 2},
 	"torch":      {"branch": 1, "fiber": 2},
+	"bedroll":    {"hide": 2, "fiber": 6},
 	"fishing_rod": {"branch": 2, "string": 2},
 	"campfire":   {"wood": 8, "stone": 4},
 	"workbench":  {"wood": 12, "stone": 4},
@@ -82,7 +83,7 @@ const BUILD_PIECES := {
 const BCELL := 3.0
 const BWALL_H := 2.6
 
-const PLACEABLES := ["torch", "campfire", "workbench", "crate", "chest",
+const PLACEABLES := ["torch", "bedroll", "campfire", "workbench", "crate", "chest",
 	"drawers", "cabinet", "furnace", "totem", "forge", "beacon",
 	"lamp", "painting"]
 
@@ -95,7 +96,7 @@ const MATERIALS := ["string", "iron_bar", "cloth", "red_dye", "yellow_dye", "bla
 # What you can make with cold hands and a flat rock. Everything else needs
 # a station — the workbench for real carpentry, the forge for metal.
 const HAND_RECIPES := ["string", "crude_axe", "crude_pick", "spear",
-	"torch", "campfire", "hammer", "workbench", "crate",
+	"torch", "bedroll", "campfire", "hammer", "workbench", "crate",
 	"red_dye", "yellow_dye", "black_dye", "fishing_rod"]
 const FORGE_ONLY := ["iron_bar", "iron_axe", "iron_pick", "iron_spear",
 	"iron_helm", "iron_chest", "scale_helm", "scale_chest", "lamp"]
@@ -149,6 +150,7 @@ const DESCRIPTIONS := {
 	"lock": "Mount it on a door or storage (E). Opens for its maker's key — and their household.",
 	"key": "Cold iron. Lose it and hope you kept a spare lock to copy from.",
 	"pack": "Someone died here. Their everything, in a sack.",
+	"bedroll": "Sleep rough, wake here. E to claim it as your spawn.",
 	"totem": "Claims this ground. Feed it wood or the rot returns.",
 	"forge": "Ore goes in. Iron comes out. Stand close to work it.",
 	"beacon": "Needs the peak. Calls across the sea.",
@@ -233,7 +235,7 @@ const NICE_NAMES := {
 	"heartstone": "Heartstone", "heart_shard": "Heart Shard",
 	"lock": "Lock", "key": "Key", "lock_and_key": "Lock & Key",
 	"key_copy": "Duplicate Key", "lock_copy": "Matching Lock",
-	"pack": "Dropped Pack",
+	"pack": "Dropped Pack", "bedroll": "Bedroll",
 	"foundation": "Foundation", "floor": "Floor",
 	"half_wall": "Half Wall", "doorway": "Doorway", "window": "Window Wall",
 	"gable": "Gable", "roof": "Roof", "slope": "Sloped Roof",
@@ -298,7 +300,7 @@ const STACK_MAX := {
 	"cloth": 20, "red_dye": 10, "yellow_dye": 10, "black_dye": 10,
 	"lamp": 2, "painting": 3,
 	"raw_fish": 10, "cooked_fish": 10, "moonfin": 5, "heartstone": 5,
-	"lock": 5, "key": 5,
+	"lock": 5, "key": 5, "bedroll": 2,
 }
 
 static func stack_max(item: String) -> int:

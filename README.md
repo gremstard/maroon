@@ -61,7 +61,7 @@ plan through 1.0: survive the hard game, earn the peaceful one.
 | | |
 |---|---|
 | **Windows** | [Maroon-Windows.exe](https://github.com/gremstard/maroon/releases/latest/download/Maroon-Windows.exe) — one file, run it. SmartScreen: *More info → Run anyway* (unsigned early build). |
-| **macOS** | [Maroon-macOS.zip](https://github.com/gremstard/maroon/releases/latest/download/Maroon-macOS.zip) — unzip, **right-click → Open** the first time. |
+| **macOS** | [Maroon-macOS.zip](https://github.com/gremstard/maroon/releases/latest/download/Maroon-macOS.zip) — unzip, **right-click → Open** the first time. If macOS says *"Maroon is damaged"*, it isn't — that's Gatekeeper on an unsigned download: run `xattr -cr <path-to>/Maroon.app` in Terminal, or System Settings → Privacy & Security → *Open Anyway*. |
 | **Website** | [maroongame.web.app](https://maroongame.web.app) |
 
 ## Playing together
