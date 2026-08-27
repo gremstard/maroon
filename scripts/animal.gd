@@ -45,110 +45,16 @@ var _has_net_state := false
 func _ready() -> void:
 	var s: Dictionary = STATS[kind]
 	hp = s["hp"]
-	var m := StandardMaterial3D.new()
-	m.albedo_color = s["color"]
+	var c: Color = s["color"]
+	match kind:
+		"wolf": _build_wolf(c)
+		"bear": _build_bear(c)
+		"boar": _build_boar(c)
+		"deer": _build_deer(c)
+		"snake": _build_snake(c)
+		"crow": _build_crow(c)
+		"dweller": _build_dweller(c)
 	var scale_f: float = s["radius"] / 0.35
-
-	var mi := MeshInstance3D.new()
-	var body_mesh := CapsuleMesh.new()
-	body_mesh.radius = s["radius"]
-	body_mesh.height = 1.4 * scale_f
-	mi.mesh = body_mesh
-	mi.rotation_degrees.x = 90.0
-	mi.position.y = 0.5 * scale_f
-	mi.material_override = m
-	add_child(mi)
-	var head := MeshInstance3D.new()
-	var hm := SphereMesh.new()
-	hm.radius = 0.22 * scale_f
-	hm.height = 0.44 * scale_f
-	head.mesh = hm
-	head.material_override = m
-	head.position = Vector3(0, 0.75, -0.7) * scale_f
-	add_child(head)
-	if kind == "snake":
-		# low, long, patient
-		mi.position.y = 0.16
-		mi.scale = Vector3(0.9, 0.55, 1.7)
-		head.position = Vector3(0, 0.22, -0.72)
-	if kind == "crow":
-		head.position = Vector3(0, 0.55, -0.4)
-		for side in [-1.0, 1.0]:
-			var wing := MeshInstance3D.new()
-			var wm := BoxMesh.new()
-			wm.size = Vector3(0.55, 0.04, 0.24)
-			wing.mesh = wm
-			wing.material_override = m
-			wing.position = Vector3(side * 0.35, 0.45, 0)
-			wing.rotation_degrees.z = side * 12.0
-			add_child(wing)
-		var beak := MeshInstance3D.new()
-		var bkm := CylinderMesh.new()
-		bkm.top_radius = 0.0
-		bkm.bottom_radius = 0.04
-		bkm.height = 0.18
-		beak.mesh = bkm
-		beak.material_override = _beak_mat()
-		beak.rotation_degrees.x = -90
-		beak.position = Vector3(0, 0.55, -0.6)
-		add_child(beak)
-	if kind == "dweller":
-		# too many pale eyes, and legs it shouldn't have
-		var deye := StandardMaterial3D.new()
-		deye.albedo_color = Color(0.85, 0.95, 1.0)
-		deye.emission_enabled = true
-		deye.emission = Color(0.7, 0.85, 1.0)
-		for k in 4:
-			var eye := MeshInstance3D.new()
-			var em := SphereMesh.new()
-			em.radius = 0.05
-			em.height = 0.1
-			eye.mesh = em
-			eye.material_override = deye
-			eye.position = Vector3(k * 0.09 - 0.135, 0.78 + (k % 2) * 0.07, -0.85)
-			add_child(eye)
-		for k in 6:
-			var leg := MeshInstance3D.new()
-			var lm := CylinderMesh.new()
-			lm.top_radius = 0.03
-			lm.bottom_radius = 0.015
-			lm.height = 0.7
-			leg.mesh = lm
-			leg.material_override = m
-			var side := -1.0 if k % 2 == 0 else 1.0
-			leg.position = Vector3(side * 0.5, 0.35, (k / 2) * 0.4 - 0.4)
-			leg.rotation_degrees.z = side * -35.0
-			add_child(leg)
-	if kind == "wolf" or kind == "bear":
-		var eye_mat := StandardMaterial3D.new()
-		var ec := Color(1, 0.2, 0.1) if kind == "wolf" else Color(1, 0.6, 0.1)
-		eye_mat.albedo_color = ec
-		eye_mat.emission_enabled = true
-		eye_mat.emission = ec
-		for side in [-0.08, 0.08]:
-			var eye := MeshInstance3D.new()
-			var em := SphereMesh.new()
-			em.radius = 0.045 * scale_f
-			em.height = 0.09 * scale_f
-			eye.mesh = em
-			eye.material_override = eye_mat
-			eye.position = Vector3(side * scale_f, 0.8 * scale_f, -0.88 * scale_f)
-			add_child(eye)
-	if kind == "boar":
-		# tusks — the thing you notice right before you regret eye contact
-		var tusk_mat := StandardMaterial3D.new()
-		tusk_mat.albedo_color = Color(0.92, 0.90, 0.82)
-		for side in [-0.12, 0.12]:
-			var tusk := MeshInstance3D.new()
-			var tm := CylinderMesh.new()
-			tm.top_radius = 0.0
-			tm.bottom_radius = 0.05
-			tm.height = 0.25
-			tusk.mesh = tm
-			tusk.material_override = tusk_mat
-			tusk.position = Vector3(side, 0.55, -0.95)
-			tusk.rotation_degrees.x = -30
-			add_child(tusk)
 	var shape := CollisionShape3D.new()
 	var cs := CapsuleShape3D.new()
 	cs.radius = s["radius"] + 0.05
@@ -158,10 +64,201 @@ func _ready() -> void:
 	add_child(shape)
 	set_meta("animal", true)
 
+# ---- box-rig fauna: every species gets a real silhouette ----
+
+var _legs: Array[Node3D] = []
+var _wings: Array[Node3D] = []
+var _walk_phase := 0.0
+var _prev_walk_pos := Vector3.ZERO
+
+func _amat(c: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = c
+	return m
+
+func _abox(size: Vector3, c: Color, pos: Vector3, rot := Vector3.ZERO) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	mi.material_override = _amat(c)
+	mi.position = pos
+	mi.rotation_degrees = rot
+	add_child(mi)
+	return mi
+
+func _aleg(size: Vector3, c: Color, pivot_pos: Vector3) -> Node3D:
+	var pivot := Node3D.new()
+	pivot.position = pivot_pos
+	add_child(pivot)
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	mi.material_override = _amat(c)
+	mi.position.y = -size.y * 0.5
+	pivot.add_child(mi)
+	_legs.append(pivot)
+	return pivot
+
+func _eyes(c: Color, positions: Array, r := 0.05, glow := true) -> void:
+	var em := StandardMaterial3D.new()
+	em.albedo_color = c
+	if glow:
+		em.emission_enabled = true
+		em.emission = c
+	for p in positions:
+		var eye := MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radius = r
+		sm.height = r * 2.0
+		eye.mesh = sm
+		eye.material_override = em
+		eye.position = p
+		add_child(eye)
+
+func _build_wolf(c: Color) -> void:
+	# lean, low, pointed everything
+	_abox(Vector3(0.48, 0.44, 1.05), c, Vector3(0, 0.66, 0.05))
+	_abox(Vector3(0.52, 0.5, 0.4), c, Vector3(0, 0.7, -0.42))          # chest
+	_abox(Vector3(0.3, 0.28, 0.36), c, Vector3(0, 0.86, -0.78))       # head
+	_abox(Vector3(0.15, 0.13, 0.3), c.darkened(0.15), Vector3(0, 0.8, -1.05))   # snout
+	for side in [-0.1, 0.1]:
+		_abox(Vector3(0.07, 0.16, 0.04), c.darkened(0.1), Vector3(side, 1.05, -0.75))   # ears
+	_abox(Vector3(0.11, 0.11, 0.5), c.darkened(0.1), Vector3(0, 0.75, 0.72), Vector3(-30, 0, 0))   # tail
+	for lx in [-0.17, 0.17]:
+		for lz in [-0.36, 0.36]:
+			_aleg(Vector3(0.11, 0.5, 0.11), c.darkened(0.2), Vector3(lx, 0.52, lz))
+	_eyes(Color(1, 0.25, 0.12), [Vector3(-0.08, 0.9, -0.94), Vector3(0.08, 0.9, -0.94)])
+
+func _build_bear(c: Color) -> void:
+	# a wall of animal with a shoulder hump
+	_abox(Vector3(0.95, 0.85, 1.5), c, Vector3(0, 0.95, 0.1))
+	_abox(Vector3(0.7, 0.4, 0.6), c.darkened(0.08), Vector3(0, 1.42, -0.3))    # the hump
+	_abox(Vector3(0.46, 0.42, 0.5), c, Vector3(0, 1.12, -0.98))               # head
+	_abox(Vector3(0.24, 0.2, 0.24), c.lightened(0.12), Vector3(0, 1.02, -1.3))  # muzzle
+	for side in [-0.16, 0.16]:
+		_abox(Vector3(0.11, 0.11, 0.06), c, Vector3(side, 1.38, -0.95))       # round ears
+	_abox(Vector3(0.16, 0.16, 0.14), c, Vector3(0, 1.05, 0.9))                # stub tail
+	for lx in [-0.34, 0.34]:
+		for lz in [-0.5, 0.5]:
+			_aleg(Vector3(0.24, 0.75, 0.26), c.darkened(0.12), Vector3(lx, 0.8, lz))
+	_eyes(Color(1, 0.6, 0.1), [Vector3(-0.12, 1.2, -1.2), Vector3(0.12, 1.2, -1.2)])
+
+func _build_boar(c: Color) -> void:
+	# a low barrel with a mane and unfortunate opinions
+	_abox(Vector3(0.55, 0.55, 1.0), c, Vector3(0, 0.5, 0.05))
+	_abox(Vector3(0.14, 0.16, 0.85), c.darkened(0.25), Vector3(0, 0.83, -0.05))   # mane ridge
+	_abox(Vector3(0.34, 0.38, 0.42), c, Vector3(0, 0.48, -0.65))                  # wedge head
+	_abox(Vector3(0.2, 0.17, 0.1), Color(0.55, 0.4, 0.35), Vector3(0, 0.4, -0.92))  # snout disc
+	for side in [-0.09, 0.09]:
+		_abox(Vector3(0.06, 0.12, 0.03), c.darkened(0.15), Vector3(side, 0.72, -0.6))  # ears
+	var tusk_mat := _amat(Color(0.92, 0.90, 0.82))
+	for side2 in [-0.13, 0.13]:
+		var tusk := MeshInstance3D.new()
+		var tm := CylinderMesh.new()
+		tm.top_radius = 0.0
+		tm.bottom_radius = 0.045
+		tm.height = 0.22
+		tusk.mesh = tm
+		tusk.material_override = tusk_mat
+		tusk.position = Vector3(side2, 0.36, -0.9)
+		tusk.rotation_degrees.x = -35
+		add_child(tusk)
+	for lx in [-0.19, 0.19]:
+		for lz in [-0.32, 0.32]:
+			_aleg(Vector3(0.1, 0.34, 0.1), c.darkened(0.2), Vector3(lx, 0.35, lz))
+	_eyes(Color(0.15, 0.1, 0.08), [Vector3(-0.13, 0.56, -0.82), Vector3(0.13, 0.56, -0.82)], 0.04, false)
+
+func _build_deer(c: Color) -> void:
+	# slender, long-legged, half of them antlered
+	_abox(Vector3(0.42, 0.48, 1.0), c, Vector3(0, 0.92, 0.05))
+	_abox(Vector3(0.16, 0.5, 0.18), c, Vector3(0, 1.32, -0.48), Vector3(28, 0, 0))   # neck
+	_abox(Vector3(0.2, 0.2, 0.34), c, Vector3(0, 1.55, -0.72))                       # head
+	_abox(Vector3(0.1, 0.09, 0.14), c.darkened(0.2), Vector3(0, 1.5, -0.92))         # nose
+	for side in [-0.09, 0.09]:
+		_abox(Vector3(0.06, 0.14, 0.03), c.lightened(0.1), Vector3(side, 1.72, -0.66))  # ears
+	_abox(Vector3(0.12, 0.12, 0.08), Color(0.95, 0.93, 0.88), Vector3(0, 1.05, 0.55))  # white tail
+	if name.hash() % 2 == 0:
+		var antler_c := Color(0.55, 0.45, 0.3)
+		for side3 in [-0.1, 0.1]:
+			_abox(Vector3(0.035, 0.3, 0.035), antler_c, Vector3(side3, 1.82, -0.68))
+			_abox(Vector3(0.035, 0.16, 0.035), antler_c, Vector3(side3 * 1.8, 1.9, -0.68), Vector3(0, 0, side3 * 350))
+	for lx in [-0.15, 0.15]:
+		for lz in [-0.35, 0.35]:
+			_aleg(Vector3(0.08, 0.85, 0.08), c.darkened(0.15), Vector3(lx, 0.88, lz))
+	_eyes(Color(0.12, 0.1, 0.08), [Vector3(-0.09, 1.58, -0.85), Vector3(0.09, 1.58, -0.85)], 0.04, false)
+
+func _build_snake(c: Color) -> void:
+	# low S of scales
+	_abox(Vector3(0.16, 0.13, 0.55), c, Vector3(0.06, 0.08, 0.35), Vector3(0, 12, 0))
+	_abox(Vector3(0.17, 0.14, 0.55), c.darkened(0.1), Vector3(-0.05, 0.08, -0.1), Vector3(0, -14, 0))
+	_abox(Vector3(0.18, 0.14, 0.4), c, Vector3(0.03, 0.09, -0.5), Vector3(0, 10, 0))
+	_abox(Vector3(0.2, 0.12, 0.24), c.lightened(0.1), Vector3(0.06, 0.1, -0.75))   # head
+	_eyes(Color(0.9, 0.8, 0.2), [Vector3(0.0, 0.16, -0.84), Vector3(0.12, 0.16, -0.84)], 0.03)
+
+func _build_crow(c: Color) -> void:
+	_abox(Vector3(0.2, 0.2, 0.42), c, Vector3(0, 0.45, 0))
+	_abox(Vector3(0.14, 0.14, 0.16), c, Vector3(0, 0.58, -0.26))
+	var beak := MeshInstance3D.new()
+	var bkm := CylinderMesh.new()
+	bkm.top_radius = 0.0
+	bkm.bottom_radius = 0.04
+	bkm.height = 0.16
+	beak.mesh = bkm
+	beak.material_override = _amat(Color(0.75, 0.62, 0.30))
+	beak.rotation_degrees.x = -90
+	beak.position = Vector3(0, 0.58, -0.4)
+	add_child(beak)
+	for side in [-1.0, 1.0]:
+		var wing := Node3D.new()
+		wing.position = Vector3(side * 0.1, 0.52, 0)
+		add_child(wing)
+		var wm := MeshInstance3D.new()
+		var wbm := BoxMesh.new()
+		wbm.size = Vector3(0.5, 0.03, 0.24)
+		wm.mesh = wbm
+		wm.material_override = _amat(c)
+		wm.position.x = side * 0.28
+		wing.add_child(wm)
+		_wings.append(wing)
+
+func _build_dweller(c: Color) -> void:
+	_abox(Vector3(0.85, 0.4, 0.95), c, Vector3(0, 0.5, 0))
+	_abox(Vector3(0.5, 0.3, 0.4), c.darkened(0.1), Vector3(0, 0.62, -0.6))
+	var deye := Color(0.85, 0.95, 1.0)
+	_eyes(deye, [Vector3(-0.14, 0.72, -0.78), Vector3(-0.05, 0.78, -0.78), Vector3(0.05, 0.78, -0.78), Vector3(0.14, 0.72, -0.78)], 0.05)
+	for k in 6:
+		var side := -1.0 if k % 2 == 0 else 1.0
+		var leg := MeshInstance3D.new()
+		var lm := CylinderMesh.new()
+		lm.top_radius = 0.03
+		lm.bottom_radius = 0.015
+		lm.height = 0.75
+		leg.mesh = lm
+		leg.material_override = _amat(c)
+		leg.position = Vector3(side * 0.55, 0.35, (k / 2) * 0.42 - 0.42)
+		leg.rotation_degrees.z = side * -38.0
+		add_child(leg)
+
+func _animate_fauna(delta: float) -> void:
+	var speed := (global_position - _prev_walk_pos).length() / maxf(delta, 0.001)
+	_prev_walk_pos = global_position
+	if _wings.size() > 0:
+		for i in _wings.size():
+			_wings[i].rotation.z = sin(Time.get_ticks_msec() * 0.02) * 0.55 * (1 if i == 0 else -1)
+		return
+	var stride := clampf(speed / 4.0, 0.0, 1.5)
+	_walk_phase += delta * 10.0 * maxf(stride, 0.01)
+	for i in _legs.size():
+		var sign2 := 1.0 if i == 0 or i == 3 else -1.0
+		_legs[i].rotation.x = sin(_walk_phase) * 0.55 * stride * sign2
+
 func _physics_process(delta: float) -> void:
 	if multiplayer.multiplayer_peer != null and not multiplayer.is_server() and _has_net_state:
 		global_position = global_position.lerp(net_target_pos, minf(1.0, delta * 10.0))
 		rotation.y = lerp_angle(rotation.y, net_target_yaw, minf(1.0, delta * 10.0))
+	_animate_fauna(delta)   # every peer walks the legs and flaps the wings
 
 func on_provoked(peer: int) -> void:
 	match kind:

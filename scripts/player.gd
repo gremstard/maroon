@@ -527,6 +527,8 @@ func _survival_tick(delta: float) -> void:
 			rx_equip.rpc(equipment)      # late joiners see your gear
 		if not appearance.is_empty():
 			rx_appearance.rpc(appearance)   # ...and your face
+		if held_net != "":
+			rx_tool.rpc(held_net)        # ...and what's in your hand
 	if poisoned_t > 0.0:
 		poisoned_t -= delta
 		hp -= delta * 1.3
@@ -900,7 +902,11 @@ func _animate_walk(delta: float) -> void:
 	_walk_phase += delta * 9.0 * maxf(stride, 0.01)
 	var swing := sin(_walk_phase) * 0.7 * stride
 	_arm_l.rotation.x = swing
-	_arm_r.rotation.x = -swing
+	if _held != null:
+		# a full hand rides raised and steady so everyone can see the tool
+		_arm_r.rotation.x = lerpf(_arm_r.rotation.x, -0.85, 0.15)
+	else:
+		_arm_r.rotation.x = -swing
 	_leg_l.rotation.x = -swing
 	_leg_r.rotation.x = swing
 
@@ -1092,18 +1098,21 @@ func rx_lamp(on: bool) -> void:
 @rpc("any_peer", "call_remote", "reliable")
 func rx_tool(tool: String) -> void:
 	# Third-person held tool, gripped in the right hand.
-	if multiplayer.get_remote_sender_id() != peer_id or _arm_r == null:
+	if multiplayer.get_remote_sender_id() not in [0, peer_id] or _arm_r == null:
 		return
 	held_net = tool
 	if _held:
 		_held.queue_free()
 		_held = null
 	if tool == "hand":
+		if _arm_r:
+			_arm_r.rotation.x = 0.0
 		return
 	_held = Node3D.new()
 	_arm_r.add_child(_held)
-	_held.position = Vector3(0, -0.62, 0)
-	_held.rotation_degrees.x = -90   # held forward
+	_held.position = Vector3(0, -0.64, -0.06)
+	_held.rotation_degrees.x = -100   # held forward-up, proud and visible
+	_held.scale = Vector3.ONE * 1.35
 	var wood := Color(0.42, 0.30, 0.17)
 	var head_c: Color = TOOL_MATERIAL_COLORS.get(tool.get_slice("_", 0), Color(0.5, 0.5, 0.5))
 	var part := func(size: Vector3, c: Color, pos: Vector3) -> void:

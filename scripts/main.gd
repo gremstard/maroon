@@ -193,6 +193,31 @@ func _ready() -> void:
 			await get_tree().create_timer(0.4).timeout
 			pl._try_fish()
 			await get_tree().create_timer(0.4).timeout
+		if "--shot-fauna" in args:
+			for a in world.get_node("Animals").get_children():
+				if a.global_position.distance_to(pl.global_position) < 30.0:
+					a.queue_free()
+			await get_tree().process_frame
+			var ffwd: Vector3 = -pl.head.global_transform.basis.z
+			ffwd.y = 0
+			ffwd = ffwd.normalized()
+			var fside: Vector3 = ffwd.cross(Vector3.UP)
+			var lineup := ["wolf", "bear", "boar", "deer"]
+			for i in lineup.size():
+				world.animal_counter += 1
+				var apos: Vector3 = pl.global_position + ffwd * 5.5 + fside * (float(i) * 2.4 - 3.6)
+				apos.y = world.height_at(apos.x, apos.z) + 0.1
+				world.rx_spawn_animal("fx_%d" % i, lineup[i], apos)
+				var an: Animal = world.get_node("Animals").get_node("fx_%d" % i)
+				an.rotation.y = pl.rotation.y
+				an.set_physics_process(false)
+			_spawn_player(950)
+			var axe_buddy: Player = world.get_node("Players/950")
+			var bpos2: Vector3 = pl.global_position + ffwd * 3.2 + fside * 3.4
+			axe_buddy.global_position = Vector3(bpos2.x, world.height_at(bpos2.x, bpos2.z) + 0.1, bpos2.z)
+			axe_buddy.rotation.y = pl.rotation.y + PI + 0.5
+			axe_buddy.rx_tool("crude_axe")
+			await get_tree().create_timer(0.5).timeout
 		if "--shot-wave" in args:
 			var tw := pl.global_position + Vector3(6, 0, -4)
 			world.sv_place_structure("totem", tw, 0.0)
