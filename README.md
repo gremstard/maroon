@@ -89,6 +89,9 @@ Maroon is friends-only co-op — no accounts, no matchmaking, no strangers.
   no other dependencies. Dedicated servers, dev flags, exports.
 - **[Design document →](DESIGN.md)** — the full vision: the Long Game,
   biomes, the road to 1.0, and why PnPvE is the whole point.
+- **[The project record →](docs/HISTORY.md)** — the development chronicle,
+  plus [every decision](docs/DECISIONS.md), [every system](docs/SYSTEMS.md),
+  and [the playtest log](docs/PLAYTEST-LOG.md).
 
 ---
 
