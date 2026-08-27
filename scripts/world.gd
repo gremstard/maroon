@@ -2820,6 +2820,19 @@ func rx_heart_restored() -> void:
 
 # ================================================================ persistence
 
+# Bump when the save format changes shape, and add a case to _migrate_world.
+# Old worlds must survive every update between here and 1.0 — that's the law.
+const SAVE_VERSION := 1
+
+static func _migrate_world(data: Dictionary, from_version: int) -> Dictionary:
+	var v := from_version
+	while v < SAVE_VERSION:
+		match v:
+			0:
+				pass   # v0 (pre-stamp): every field already loads via .get defaults
+		v += 1
+	return data
+
 var _save_accum := 0.0
 
 func _save_file() -> String:
@@ -2855,6 +2868,8 @@ func save_now() -> void:
 		if c is StaticBody3D and c.get_meta("looted", false):
 			crates.append(String(c.name))
 	var data := {
+		"save_version": SAVE_VERSION,
+		"app_version": ProjectSettings.get_setting("application/config/version", "dev"),
 		"day": day, "tod": time_of_day, "struct_counter": struct_counter,
 		"structs": structs, "res": res, "looted": crates,
 		"chest_opened": get_node("Ruins/ruins_chest").get_meta("opened"),
@@ -2877,6 +2892,12 @@ func _load_save() -> bool:
 	f.close()
 	if data == null:
 		return false
+	var sv := int(data.get("save_version", 0))
+	if sv > SAVE_VERSION:
+		push_warning("[maroon] world save is from a NEWER Maroon (v%d > v%d) — loading best-effort; update the game." % [sv, SAVE_VERSION])
+	elif sv < SAVE_VERSION:
+		data = _migrate_world(data, sv)
+		print("[maroon] migrated world save v%d -> v%d" % [sv, SAVE_VERSION])
 	day = int(data.get("day", 1))
 	time_of_day = float(data.get("tod", 8.0))
 	struct_counter = int(data.get("struct_counter", 0))

@@ -1770,6 +1770,17 @@ func craft(recipe: String) -> void:
 
 # ---------------------------------------------------------------- persistence
 
+const PSAVE_VERSION := 1
+
+static func _migrate_psave(data: Dictionary, from_version: int) -> Dictionary:
+	var v := from_version
+	while v < PSAVE_VERSION:
+		match v:
+			0:
+				pass   # pre-stamp: fields load via .get defaults (incl. tools->hotbar migration)
+		v += 1
+	return data
+
 var _psave_accum := 0.0
 
 func _psave_file() -> String:
@@ -1780,6 +1791,7 @@ func save_local() -> void:
 		return
 	DirAccess.make_dir_recursive_absolute("user://saves")
 	var data := {
+		"save_version": PSAVE_VERSION,
 		"inv": inv, "tools": owned_tools.keys(), "crafted": crafted.keys(),
 		"gathered": total_gathered, "events": events,
 		"hp": hp, "hunger": hunger, "equipment": equipment,
@@ -1798,6 +1810,9 @@ func load_local() -> void:
 	f.close()
 	if data == null:
 		return
+	var sv := int(data.get("save_version", 0))
+	if sv < PSAVE_VERSION:
+		data = _migrate_psave(data, sv)
 	for k in data.get("inv", {}):
 		inv[k] = int(data["inv"][k])
 	for t in data.get("tools", []):

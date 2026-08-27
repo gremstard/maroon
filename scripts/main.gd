@@ -1169,7 +1169,14 @@ func _run_smoke_test() -> void:
 	world.save_now()
 	p.save_local()
 	ok = ok and FileAccess.file_exists("user://saves/world_42.json")
-	print("[smoke] save file written: ", FileAccess.file_exists("user://saves/world_42.json"))
+	var vsave: Variant = JSON.parse_string(FileAccess.open("user://saves/world_42.json", FileAccess.READ).get_as_text())
+	print("[smoke] save file written: v%d (app %s)" % [vsave.get("save_version", -1), vsave.get("app_version", "?")])
+	ok = ok and int(vsave.get("save_version", -1)) == World.SAVE_VERSION
+	# a v0 (pre-stamp) save must migrate cleanly
+	var legacy: Dictionary = vsave.duplicate()
+	legacy.erase("save_version")
+	var migrated := World._migrate_world(legacy, 0)
+	ok = ok and migrated.has("day")
 
 	# placing + totem stock
 	world.sv_place_structure("totem", p.global_position + Vector3(2, 0, 0), 0.0)

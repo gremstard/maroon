@@ -5,6 +5,7 @@ class_name Profile
 # syncs to Firestore so your identity travels between machines.
 
 const PATH := "user://profile.json"
+const PROFILE_VERSION := 1
 
 const HAIR_STYLES := ["short", "long", "bald"]
 
@@ -33,6 +34,7 @@ static func load_profile() -> Dictionary:
 	return p
 
 static func save_profile(p: Dictionary) -> void:
+	p["profile_version"] = PROFILE_VERSION
 	var f := FileAccess.open(PATH, FileAccess.WRITE)
 	f.store_string(JSON.stringify(p))
 	f.close()
