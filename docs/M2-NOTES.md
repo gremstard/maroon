@@ -4,6 +4,12 @@
 development, so day one of M2 starts from here, not from zero.
 Status: waits until Maroon 1.0 ships and teaches its lessons.*
 
+> **Superseded by [CRIMSON-DESIGN.md](CRIMSON-DESIGN.md)** — the full
+> master design doc. Where the two disagree (notably the SCAVOCK import
+> list, which was narrowed to exactly three things: the combat/weapons
+> philosophy, the online approach, and the Steam-grade seriousness),
+> CRIMSON-DESIGN.md wins. This file stays as the historical record.
+
 ## Name
 **Recommended: CRIMSON** — Maroon's blood-red sibling; the color family
 tells the story ("You survived Maroon. Crimson survives you."). Shortlist:
